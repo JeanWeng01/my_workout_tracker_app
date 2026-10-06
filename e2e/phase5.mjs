@@ -95,7 +95,8 @@ await shot('12-settings');
 const settingsText = await page.locator('body').innerText();
 check('microplate toggle present while off', settingsText.includes('1.25 lb microplates'));
 await page.getByRole('button', { name: 'Off' }).click();
-check('microplate toggle turns on', await page.getByRole('button', { name: 'On', exact: true }).isVisible());
+await page.getByRole('button', { name: 'On', exact: true }).waitFor({ timeout: 5000 });
+check('microplate toggle turns on', true);
 await page.getByRole('button', { name: 'On', exact: true }).click();
 
 // CSV

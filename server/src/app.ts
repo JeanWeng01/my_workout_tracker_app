@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { bearerMatches } from './auth.js';
+import { bearerMatches, FailureLimiter } from './auth.js';
 import { BadRequest, pull, push } from './sync.js';
 
 export interface AppOptions {
@@ -16,7 +16,23 @@ export interface AppOptions {
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   if (!opts.syncToken) throw new Error('SYNC_TOKEN is required');
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 10 * 1024 * 1024 });
+  // Behind Railway's proxy: take the caller's address from X-Forwarded-For.
+  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 10 * 1024 * 1024, trustProxy: true });
+
+  // Keep search engines out and lock the page down. None of this affects the app itself.
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    );
+    if (req.headers['x-forwarded-proto'] === 'https') reply.header('Strict-Transport-Security', 'max-age=31536000');
+  });
+
+  const limiter = new FailureLimiter(30, 15 * 60_000);
 
   app.get('/api/health', async () => ({ ok: true }));
 
@@ -24,7 +40,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0];
     if (!path.startsWith('/api/') || path === '/api/health') return;
+    if (limiter.blocked(req.ip)) return reply.code(429).header('Retry-After', '900').send({ error: 'too many failed attempts' });
     if (!bearerMatches(req.headers.authorization, opts.syncToken)) {
+      limiter.fail(req.ip);
       return reply.code(401).header('WWW-Authenticate', 'Bearer').send({ error: 'unauthorized' });
     }
   });

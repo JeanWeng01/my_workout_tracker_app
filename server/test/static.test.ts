@@ -43,3 +43,31 @@ describe('serving the client', () => {
     expect(api.headers['content-type']).toContain('json');
   });
 });
+
+describe('hardening', () => {
+  it('asks search engines not to index, and sets security headers', async () => {
+    const r = await app.inject({ url: '/' });
+    expect(r.headers['x-robots-tag']).toContain('noindex');
+    expect(r.headers['x-content-type-options']).toBe('nosniff');
+    expect(r.headers['x-frame-options']).toBe('DENY');
+    expect(r.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(r.headers['referrer-policy']).toBe('no-referrer');
+  });
+
+  it('adds HSTS only behind https', async () => {
+    expect((await app.inject({ url: '/' })).headers['strict-transport-security']).toBeUndefined();
+    const r = await app.inject({ url: '/', headers: { 'x-forwarded-proto': 'https' } });
+    expect(r.headers['strict-transport-security']).toContain('max-age');
+  });
+
+  it('turns a caller away after too many wrong tokens, but not other callers', async () => {
+    const bad = { authorization: 'Bearer nope', 'x-forwarded-for': '203.0.113.9' };
+    let last = 0;
+    for (let i = 0; i < 31; i++) last = (await app.inject({ url: '/api/sync', headers: bad })).statusCode;
+    expect(last).toBe(429);
+    // the real token from the same address is also paused until the window passes
+    expect((await app.inject({ url: '/api/sync', headers: { ...auth, 'x-forwarded-for': '203.0.113.9' } })).statusCode).toBe(429);
+    // a different caller is unaffected
+    expect((await app.inject({ url: '/api/sync', headers: { ...auth, 'x-forwarded-for': '198.51.100.7' } })).statusCode).toBe(200);
+  });
+});
