@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Program } from '../data/useProgram';
 import { LIFT_NAME } from '../engine';
+import { useSyncLine } from '../data/sync';
 import { Calendar } from './Calendar';
 import { Mantra } from './Mantra';
 import { schemeLabel, weightSummary } from './format';
@@ -25,6 +26,7 @@ interface HomeProps {
 
 export function Home({ program, onStart, onSettings, onOpenSession, notice, onDismissNotice }: HomeProps) {
   const [calOpen, setCalOpen] = useState(false);
+  const syncLine = useSyncLine();
   const { plan, state, draft, sessions } = program;
   // The most recent attempt was left unfinished and nothing was finished since.
   const latest = [...sessions]
@@ -72,7 +74,7 @@ export function Home({ program, onStart, onSettings, onOpenSession, notice, onDi
           <span>Phase: {state.phase === 'linear' ? 'Linear' : '5/3/1'}</span>
           <button className="btn-link" onClick={onSettings}>Settings</button>
         </div>
-        <div className="sync-line">Not synced: sync not set up yet</div>
+        <div className="sync-line">{syncLine}</div>
       </footer>
     </div>
   );

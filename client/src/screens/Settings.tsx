@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
-import {
-  getSyncToken, loadEverything, restartLinear, restoreBackup, saveSettings, setSyncToken, switchPhase,
-} from '../data/store';
+import { loadEverything, restartLinear, restoreBackup, saveSettings, switchPhase } from '../data/store';
+import { getSyncToken, setSyncToken, syncNow, useSyncLine, useSyncStatus } from '../data/sync';
 import type { Program } from '../data/useProgram';
 import {
   ALL_LIFTS, LIFT_NAME, MAIN_LIFTS, backupFilename, buildCsv, computeTrainingMaxes, csvFilename, makeBackup,
@@ -61,6 +60,8 @@ export function SettingsScreen({ program, onBack }: { program: Program; onBack: 
   const set = (patch: Partial<Settings>) => void saveSettings({ ...s, ...patch });
   const [token, setToken] = useState(getSyncToken());
   const [msg, setMsg] = useState<string | null>(null);
+  const syncLine = useSyncLine();
+  const syncKind = useSyncStatus().kind;
 
   if (view === 'about') return <Sub title="About the rules" onBack={() => setView('main')}><div className="bubble set-group"><AboutRules /></div></Sub>;
   if (view === 'switch') return <SwitchPhase program={program} onBack={() => setView('main')} />;
@@ -135,8 +136,9 @@ export function SettingsScreen({ program, onBack }: { program: Program; onBack: 
       <Group title="Sync">
         <label className="set-label" htmlFor="tok">Sync token</label>
         <input id="tok" className="text-in" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your token" />
-        <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => { setSyncToken(token.trim()); setMsg('Token saved on this phone.'); }}>Save token</button>
-        <div className="small">{token ? 'Not synced: syncing arrives in the next update.' : 'Sync token missing'}</div>
+        <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => { setSyncToken(token.trim()); setMsg('Token saved on this phone.'); void syncNow(); }}>Save token</button>
+        <div className="small" role="status">{syncLine}</div>
+        <button className="btn-link" style={{ paddingLeft: 0 }} disabled={syncKind === 'syncing'} onClick={() => void syncNow()}>Sync now</button>
       </Group>
 
       <DataGroup program={program} setMsg={setMsg} />

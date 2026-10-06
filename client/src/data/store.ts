@@ -25,6 +25,7 @@ import {
   type Template,
 } from '../engine';
 import { db } from './db';
+import { scheduleSync } from './sync';
 
 const nowIso = () => new Date().toISOString();
 
@@ -37,13 +38,15 @@ export async function ensureSettings(): Promise<Settings> {
   const existing = await db.settings.get('settings');
   // Fill in fields added by newer versions of the app.
   if (existing) return { ...defaultSettings(), ...existing };
-  const s = { ...defaultSettings(), dirty: 1 as const };
+  // Epoch timestamp and not dirty: untouched defaults can never overwrite real settings on the server.
+  const s = { ...defaultSettings('1970-01-01T00:00:00.000Z'), dirty: 0 as const };
   await db.settings.put(s);
   return s;
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
   await db.settings.put({ ...s, updatedAt: nowIso(), dirty: 1 });
+  scheduleSync();
 }
 
 export async function getDraft(): Promise<Session | undefined> {
@@ -78,7 +81,7 @@ export async function updateDraft(id: string, fn: (s: Session) => Session): Prom
  * never counted); a workout with nothing logged just disappears. Returns whether a yellow day was kept.
  */
 export async function exitWorkout(id: string): Promise<boolean> {
-  return db.transaction('rw', db.sessions, async () => {
+  const kept = await db.transaction('rw', db.sessions, async () => {
     const cur = await db.sessions.get(id);
     if (!cur || cur.finishedAt !== null) return false;
     if (isEmptyDraft(cur)) {
@@ -88,6 +91,8 @@ export async function exitWorkout(id: string): Promise<boolean> {
     await db.sessions.put({ ...abandonSession(cur, nowIso()), dirty: 1 });
     return true;
   });
+  if (kept) scheduleSync();
+  return kept;
 }
 
 /** On app open: a draft untouched for 12+ hours becomes an unfinished workout. */
@@ -125,6 +130,9 @@ export async function finishWorkout(id: string, untouched: 'missed' | 'skip'): P
     const grad = checkGraduation(settings, sessions, decisions, id);
     if (grad) await db.decisions.put({ ...grad, dirty: 1 });
     return { graduated: !!grad, discarded: false };
+  }).then((r) => {
+    scheduleSync();
+    return r;
   });
 }
 
@@ -143,6 +151,7 @@ export async function saveDecision(body: DecisionBody): Promise<Decision> {
     body,
   };
   await db.decisions.put({ ...d, dirty: 1 });
+  scheduleSync();
   return d;
 }
 
@@ -201,6 +210,7 @@ export async function updateSession(id: string, fn: (s: Session) => Session): Pr
     if (!cur) return;
     await db.sessions.put({ ...fn(cur), updatedAt: nowIso(), dirty: 1 });
   });
+  scheduleSync();
 }
 
 /** Soft delete: a tombstone, so the deletion syncs. */
@@ -219,33 +229,18 @@ export async function restartLinear(weights: Record<Lift, number>): Promise<void
 
 /** Replaces everything local with a validated backup. Call validateBackup first. */
 export async function restoreBackup(b: Backup): Promise<void> {
+  // Restored records get a fresh timestamp so the restore wins last-write-wins on the server too.
+  const stamp = nowIso();
   await db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
     await Promise.all([db.settings.clear(), db.sessions.clear(), db.decisions.clear()]);
-    await db.settings.put({ ...defaultSettings(), ...b.settings, dirty: 1 });
-    await db.sessions.bulkPut(b.sessions.map((s) => ({ ...s, dirty: 1 as const })));
-    await db.decisions.bulkPut(b.decisions.map((d) => ({ ...d, dirty: 1 as const })));
+    await db.settings.put({ ...defaultSettings(), ...b.settings, updatedAt: stamp, dirty: 1 });
+    await db.sessions.bulkPut(b.sessions.map((s) => ({ ...s, updatedAt: stamp, dirty: 1 as const })));
+    await db.decisions.bulkPut(b.decisions.map((d) => ({ ...d, updatedAt: stamp, dirty: 1 as const })));
   });
+  scheduleSync();
 }
 
 export async function loadEverything() {
   const [settings, sessions, decisions] = await Promise.all([ensureSettings(), db.sessions.toArray(), db.decisions.toArray()]);
   return { settings, sessions, decisions };
-}
-
-/** Sync token lives on this device only; it is never part of a backup. */
-const TOKEN_KEY = 'bulletproof.syncToken';
-export function getSyncToken(): string {
-  try {
-    return localStorage.getItem(TOKEN_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-export function setSyncToken(t: string): void {
-  try {
-    if (t) localStorage.setItem(TOKEN_KEY, t);
-    else localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // Private mode etc.: the token just won't persist.
-  }
 }

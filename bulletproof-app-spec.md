@@ -95,9 +95,14 @@ Replaying a few hundred sessions is trivially fast. Don't optimize.
 **Postgres schema `bulletproof`:**
 
 ```sql
-settings  (id uuid pk, data jsonb not null, updated_at timestamptz not null)
-sessions  (id uuid pk, data jsonb not null, updated_at timestamptz not null, deleted boolean not null default false)
-decisions (id uuid pk, data jsonb not null, updated_at timestamptz not null, deleted boolean not null default false)
+settings  (id text pk, data jsonb not null, updated_at timestamptz not null, synced_at timestamptz not null default now())
+sessions  (id uuid pk, data jsonb not null, updated_at timestamptz not null, deleted boolean not null default false, synced_at timestamptz not null default now())
+decisions (id uuid pk, data jsonb not null, updated_at timestamptz not null, deleted boolean not null default false, synced_at timestamptz not null default now())
+-- Two deliberate deviations from the first draft of this spec:
+--  * settings.id is text: the client keeps one settings record under a fixed id, not a uuid.
+--  * synced_at (server arrival time) is the pull cursor, not updated_at. updated_at is the client's clock and
+--    decides last-write-wins; but a record edited offline hours ago must still reach a phone that pulled in
+--    between, and only the arrival time can guarantee that.
 ```
 
 Records are stored as JSONB documents exactly as the client holds them (plus a `schemaVersion` inside `data`).

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { startAutoSync } from './data/sync';
 import { startWorkout } from './data/store';
 import { useProgram, type Program } from './data/useProgram';
 import { Congrats } from './screens/Congrats';
@@ -14,6 +15,7 @@ const planSignature = (p: Program) =>
 
 export function App() {
   const program = useProgram();
+  useEffect(() => startAutoSync(), []);
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   const [congrats, setCongrats] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
