@@ -134,3 +134,29 @@ describe('calendar grid', () => {
     expect(finishedOnDate(t.sessions, '2030-01-01')).toEqual([]);
   });
 });
+
+describe('workout notes in the CSV', () => {
+  it('writes the note once, on the first row of the session, as one string', () => {
+    const t = new Timeline();
+    const s = t.log([linearLift('squat', 65, ok()), linearLift('bench', 45, ok())]);
+    s.notes = 'Left knee clicky, felt strong.\nTry "slower" eccentrics, next time';
+    t.log([linearLift('squat', 70, ok())]); // a second session without a note
+    const csv = buildCsv(t.settings, t.sessions, t.decisions);
+    expect(csv.startsWith(BOM)).toBe(true);
+    const text = csv.slice(1);
+    // quoted, quotes doubled, newline preserved inside the quoted field
+    expect(text).toContain('"Left knee clicky, felt strong.\nTry ""slower"" eccentrics, next time"');
+    expect(text.split('Left knee clicky').length - 1).toBe(1); // exactly once
+    const header = text.split('\r\n')[0].split(',');
+    expect(header[header.length - 1]).toBe('notes');
+    const firstRow = text.split('\r\n')[1];
+    expect(firstRow.includes('Left knee clicky')).toBe(true);
+  });
+
+  it('sessions without a note leave the column empty', () => {
+    const t = new Timeline();
+    t.log([linearLift('squat', 65, ok())]);
+    const rows = buildCsv(t.settings, t.sessions, t.decisions).slice(1).split('\r\n').filter(Boolean);
+    expect(rows[1].endsWith(',')).toBe(true);
+  });
+});

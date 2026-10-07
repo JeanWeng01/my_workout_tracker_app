@@ -2,6 +2,7 @@ import {
   abandonSession,
   checkGraduation,
   defaultSettings,
+  withDefaults,
   deriveState,
   draftFromPlan,
   finishSession,
@@ -37,7 +38,7 @@ function localDate(d = new Date()): string {
 export async function ensureSettings(): Promise<Settings> {
   const existing = await db.settings.get('settings');
   // Fill in fields added by newer versions of the app.
-  if (existing) return { ...defaultSettings(), ...existing };
+  if (existing) return withDefaults(existing);
   // Epoch timestamp and not dirty: untouched defaults can never overwrite real settings on the server.
   const s = { ...defaultSettings('1970-01-01T00:00:00.000Z'), dirty: 0 as const };
   await db.settings.put(s);
@@ -233,7 +234,7 @@ export async function restoreBackup(b: Backup): Promise<void> {
   const stamp = nowIso();
   await db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
     await Promise.all([db.settings.clear(), db.sessions.clear(), db.decisions.clear()]);
-    await db.settings.put({ ...defaultSettings(), ...b.settings, updatedAt: stamp, dirty: 1 });
+    await db.settings.put({ ...withDefaults(b.settings), updatedAt: stamp, dirty: 1 });
     await db.sessions.bulkPut(b.sessions.map((s) => ({ ...s, updatedAt: stamp, dirty: 1 as const })));
     await db.decisions.bulkPut(b.decisions.map((d) => ({ ...d, updatedAt: stamp, dirty: 1 as const })));
   });

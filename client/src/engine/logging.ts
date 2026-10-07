@@ -146,3 +146,29 @@ export function isStaleDraft(s: Session, nowMs: number): boolean {
 export function isActiveDraft(s: Session): boolean {
   return s.finishedAt === null && !s.abandonedAt && !s.deleted;
 }
+
+/**
+ * Every planned work and extra-work (supplemental) set of every lift that is still in the workout has been
+ * completed. Warm-ups are optional, extra sets and skipped lifts don't count. Used to finish automatically.
+ */
+export function isWorkoutComplete(s: Session): boolean {
+  let required = 0;
+  for (const l of s.lifts) {
+    if (l.skipped) continue;
+    for (const x of l.sets) {
+      if (x.extra || x.type === 'warmup') continue;
+      required += 1;
+      if (!x.done) return false;
+    }
+  }
+  return required > 0;
+}
+
+export const NOTES_MAX = 2000;
+
+/** Personal note for the workout. Blank clears it. */
+export function setNotes(s: Session, text: string): Session {
+  const t = text.slice(0, NOTES_MAX);
+  const { notes: _old, ...rest } = s;
+  return t.trim() ? { ...rest, notes: t } : rest;
+}

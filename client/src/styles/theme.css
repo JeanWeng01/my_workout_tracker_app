@@ -208,3 +208,18 @@ body {
 .banner ul { margin: 6px 0 0; padding-left: 20px; }
 .set-group { width: auto; }
 .cal { width: calc(100% - 32px); }
+
+/* Note + auto-finish popup */
+.link-row { display: flex; align-items: center; justify-content: space-between; }
+.note-in {
+  width: 100%; min-height: 110px; margin-top: 4px; padding: 12px; border-radius: 12px;
+  border: 2px solid var(--iron); background: var(--mist); color: var(--ink);
+  font: inherit; resize: vertical;
+}
+.celebrate-wrap { align-items: center; }
+.celebrate { background: var(--mist); border-radius: 24px; padding: 28px 32px 12px; text-align: center; margin: 0 24px; }
+.celebrate-text { font-size: 28px; font-weight: 800; }
+@media (prefers-reduced-motion: no-preference) {
+  .celebrate { animation: pop 220ms ease-out; }
+  @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+}

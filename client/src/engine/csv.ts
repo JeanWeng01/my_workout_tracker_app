@@ -31,6 +31,7 @@ export function buildCsv(settings: Settings, sessions: Session[], decisions: Dec
 
   ordered.forEach((s, idx) => {
     const before = deriveState(settings, ordered.slice(0, idx), decisions);
+    let noteWritten = false;
     for (const l of s.lifts) {
       if (l.skipped) continue;
       const is531 = s.phase === '531' && l.lift !== 'row';
@@ -42,7 +43,10 @@ export function buildCsv(settings: Settings, sessions: Session[], decisions: Dec
       for (const set of l.sets) {
         if (set.type === 'warmup' && !set.done) continue;
         n += 1;
+        // The workout's note goes on the first row of the session only, so it isn't repeated on every set.
+        const note = s.notes && !noteWritten ? s.notes : '';
         const e1 = set.done && set.type !== 'warmup' && set.type !== 'supplemental' ? estimate1RM(set.weight, set.reps) : 0;
+        if (note) noteWritten = true;
         lines.push(
           [
             s.date, s.id, s.label, s.phase, l.lift, l.scheme,
@@ -50,11 +54,11 @@ export function buildCsv(settings: Settings, sessions: Session[], decisions: Dec
             set.done ? set.weight : '', set.done ? set.reps : '',
             set.done && set.reps >= set.targetReps ? 'TRUE' : 'FALSE',
             set.type === 'amrap' ? 'TRUE' : 'FALSE',
-            ws ? ws.tm : '', cycle, waveWeek, e1 ? Math.round(e1 * 10) / 10 : '', '',
+            ws ? ws.tm : '', cycle, waveWeek, e1 ? Math.round(e1 * 10) / 10 : '', note,
           ].map(csvField).join(','),
         );
       }
     }
   });
-  return '﻿' + lines.join('\r\n') + '\r\n';
+  return String.fromCharCode(0xfeff) + lines.join('\r\n') + '\r\n';
 }

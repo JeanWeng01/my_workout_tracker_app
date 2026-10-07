@@ -154,3 +154,89 @@ describe('unfinished workouts', () => {
     expect(totalWorkouts([gone, done, sameDay, inProgress])).toBe(2);
   });
 });
+
+import { isWorkoutComplete, NOTES_MAX, setNotes } from './logging';
+import { withDefaults } from './defaults';
+
+describe('automatic finish', () => {
+  const allWork = (s: ReturnType<typeof fresh>) => {
+    let d = s;
+    d.lifts.forEach((l, li) =>
+      l.sets.forEach((x, si) => {
+        if ((x.type === 'work' || x.type === 'amrap' || x.type === 'supplemental') && !x.extra) d = toggleSet(d, li, si);
+      }),
+    );
+    return d;
+  };
+
+  it('is false until every work set of every lift is done; warm-ups do not matter', () => {
+    let d = fresh();
+    expect(isWorkoutComplete(d)).toBe(false);
+    const done = allWork(d);
+    expect(isWorkoutComplete(done)).toBe(true);
+    expect(done.lifts[0].sets.filter((x) => x.type === 'warmup').every((x) => !x.done)).toBe(true);
+    // undo one set again
+    const i = done.lifts[2].sets.findIndex((x) => x.type === 'work');
+    d = toggleSet(done, 2, i);
+    expect(isWorkoutComplete(d)).toBe(false);
+  });
+
+  it('skipped lifts are left out; a workout with everything skipped is never complete', () => {
+    let d = fresh();
+    d = setSkipped(d, 1, true);
+    d = setSkipped(d, 2, true);
+    expect(isWorkoutComplete(d)).toBe(false);
+    d.lifts[0].sets.forEach((x, si) => {
+      if (x.type === 'work') d = toggleSet(d, 0, si);
+    });
+    expect(isWorkoutComplete(d)).toBe(true);
+    const all = setSkipped(setSkipped(setSkipped(fresh(), 0, true), 1, true), 2, true);
+    expect(isWorkoutComplete(all)).toBe(false);
+  });
+
+  it('extra sets never block completion', () => {
+    let d = allWork(fresh());
+    d = addExtraSet(d, 0);
+    expect(isWorkoutComplete(d)).toBe(true);
+  });
+
+  it('5/3/1: the extra-work (FSL) sets must be done too', () => {
+    const s531 = { ...settings, template: 'fsl' as const };
+    const st = deriveState(s531, [], []);
+    st.phase = '531';
+    for (const l of ['squat', 'bench', 'deadlift', 'ohp'] as const) st.wave[l].tm = 200;
+    const plan531 = planNextSession(st, s531, '2026-01-02');
+    let d = draftFromPlan(plan531, s531, 'w1', '2026-01-02T10:00:00Z', '2026-01-02');
+    d.lifts[0].sets.forEach((x, si) => {
+      if (x.type === 'work' || x.type === 'amrap') d = toggleSet(d, 0, si);
+    });
+    expect(isWorkoutComplete(d)).toBe(false); // supplemental still open
+    d.lifts[0].sets.forEach((x, si) => {
+      if (x.type === 'supplemental') d = toggleSet(d, 0, si);
+    });
+    expect(isWorkoutComplete(d)).toBe(true);
+  });
+});
+
+describe('notes', () => {
+  it('sets, trims to the limit, and clears when blank', () => {
+    const d = setNotes(fresh(), 'felt good');
+    expect(d.notes).toBe('felt good');
+    expect(setNotes(d, '   ').notes).toBeUndefined();
+    expect(setNotes(d, 'x'.repeat(NOTES_MAX + 50)).notes).toHaveLength(NOTES_MAX);
+    expect(fresh().notes).toBeUndefined();
+  });
+});
+
+describe('rest time default', () => {
+  it('is 90 s for work sets, and an untouched saved 180 s default migrates; a custom one is kept', () => {
+    expect(defaultSettings().restSeconds.work).toBe(90);
+    const old = { ...defaultSettings(), restSeconds: { warmup: 60, work: 180, supplemental: 90 } };
+    expect(withDefaults(old).restSeconds.work).toBe(90);
+    const custom = { ...defaultSettings(), restSeconds: { warmup: 60, work: 120, supplemental: 90 } };
+    expect(withDefaults(custom).restSeconds.work).toBe(120);
+    const legacy = { ...defaultSettings() } as Partial<typeof old>;
+    delete legacy.restSeconds;
+    expect(withDefaults(legacy as typeof old).restSeconds.work).toBe(90);
+  });
+});

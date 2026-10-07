@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { changeSeventhWeek, exitWorkout, finishWorkout, needsUntouchedChoice, deleteSession, respondToAlert, setTemplate, updateDraft, updateSession } from '../data/store';
 import type { Program } from '../data/useProgram';
 import {
-  addExtraSet, effectivePlates, isPR, LIFT_NAME, platesPerSide, roundingIncrement, setSetValues, setSkipped,
+  addExtraSet, effectivePlates, isPR, isWorkoutComplete, setNotes, LIFT_NAME, platesPerSide, roundingIncrement, setSetValues, setSkipped,
   setWorkingWeight, stepReps, toggleSet, type LoggedLift, type LoggedSet, type MainLift, type Session, type SevenType, type Template,
 } from '../engine';
 import { CheckButton } from './CheckButton';
@@ -221,6 +221,10 @@ export function Workout({ session, program, onExit }: { session: Session; progra
   const linear = session.phase === 'linear';
   const past = session.finishedAt !== null;
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState(session.notes ?? '');
+  const [celebrate, setCelebrate] = useState(false);
+  const [held, setHeld] = useState(false); // "Not yet" pressed: don't auto-finish until a set changes
 
   const finish = async (mode: 'missed' | 'skip') => {
     const r = await finishWorkout(session.id, mode);
@@ -230,6 +234,43 @@ export function Workout({ session, program, onExit }: { session: Session; progra
     await exitWorkout(session.id);
     onExit();
   };
+  // Every set green: show the popup for 2 seconds, then finish on its own. No Finish tap needed.
+  const complete = !past && isWorkoutComplete(session);
+  useEffect(() => {
+    if (!complete) {
+      setCelebrate(false);
+      setHeld(false);
+      return;
+    }
+    if (held) return;
+    setCelebrate(true);
+    const id = setTimeout(() => void finish('missed'), 2000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complete, held]);
+
+  const saveNote = (text: string) => {
+    setNoteText(text);
+    void (past ? updateSession : updateDraft)(session.id, (x) => setNotes(x, text));
+  };
+  const noteBox = noteOpen && (
+    <div style={{ marginTop: 8 }}>
+      <label className="small" htmlFor="workout-note">Note for this workout</label>
+      <textarea
+        id="workout-note"
+        className="note-in"
+        rows={4}
+        maxLength={2000}
+        value={noteText}
+        placeholder="How it felt, pain, sleep, anything..."
+        onChange={(e) => saveNote(e.target.value)}
+      />
+    </div>
+  );
+  const noteLink = (
+    <button className="btn-link" aria-expanded={noteOpen} onClick={() => setNoteOpen(!noteOpen)}>{noteText.trim() ? 'Note •' : 'Note'}</button>
+  );
+
   const onFinishTap = () => (needsUntouchedChoice(session) ? setAsking('finish') : void finish('missed'));
 
   return (
@@ -273,7 +314,11 @@ export function Workout({ session, program, onExit }: { session: Session; progra
           ) : (
             <>
               <button className="btn" onClick={() => onExit()}>Done</button>
-              <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setConfirmDelete(true)}>Delete workout</button>
+              <div className="link-row">
+                <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setConfirmDelete(true)}>Delete workout</button>
+                {noteLink}
+              </div>
+              {noteBox}
             </>
           )}
         </div>
@@ -304,12 +349,25 @@ export function Workout({ session, program, onExit }: { session: Session; progra
         {asking === null && (
           <>
             <button className="btn" onClick={onFinishTap}>Finish workout</button>
-            <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setAsking('leave')}>Can't finish today</button>
+            <div className="link-row">
+              <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setAsking('leave')}>Can't finish today</button>
+              {noteLink}
+            </div>
+            {noteBox}
           </>
         )}
       </div>
       )}
       <div className="bottom-mantra">My muscles are A-OK, but I invest in bulletproof joints.</div>
+
+      {celebrate && (
+        <div className="sheet-backdrop celebrate-wrap" role="status" aria-live="polite">
+          <div className="celebrate">
+            <div className="celebrate-text">Workout complete! 🎉</div>
+            <button className="btn-link" onClick={() => { setCelebrate(false); setHeld(true); }}>Not yet</button>
+          </div>
+        </div>
+      )}
 
       {rest && <RestTimer rest={rest} onHide={() => setRest(null)} />}
     </div>

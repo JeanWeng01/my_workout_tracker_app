@@ -96,6 +96,8 @@ export interface Session extends Rec {
   finishedAt: string | null;
   /** Set when the lifter left the workout unfinished. Shows as a yellow day; partial sets are kept but ignored. */
   abandonedAt?: string | null;
+  /** Free-text personal note for the workout. Exported in the CSV notes column. */
+  notes?: string;
   phase: Phase;
   label: string;
   /** Snapshot taken at Finish. Absent on legacy records: current settings apply. */

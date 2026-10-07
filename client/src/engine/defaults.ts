@@ -32,6 +32,19 @@ export function defaultSettings(now = new Date().toISOString()): Settings {
     bbbPercent: 0.5,
     deloadStyle: 'forever',
     startingWeights: { squat: 65, bench: 45, row: 45, ohp: 45, deadlift: 95 },
-    restSeconds: { warmup: 60, work: 180, supplemental: 90 },
+    restSeconds: { warmup: 60, work: 90, supplemental: 90 },
   };
+}
+
+/** Rest times before the work-set default became 90 s. Saved copies still holding exactly these get the new default. */
+const OLD_REST_DEFAULT = { warmup: 60, work: 180, supplemental: 90 };
+
+/** Stored settings filled in with anything added since they were saved, plus small default migrations. */
+export function withDefaults(stored: Settings): Settings {
+  const merged = { ...defaultSettings(), ...stored };
+  const r = merged.restSeconds;
+  if (r.warmup === OLD_REST_DEFAULT.warmup && r.work === OLD_REST_DEFAULT.work && r.supplemental === OLD_REST_DEFAULT.supplemental) {
+    merged.restSeconds = { ...defaultSettings().restSeconds };
+  }
+  return merged;
 }

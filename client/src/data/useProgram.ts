@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo } from 'react';
-import { defaultSettings, deriveState, isActiveDraft, planNextSession, type Decision, type ProgramState, type Session, type SessionPlan, type Settings } from '../engine';
+import { withDefaults, deriveState, isActiveDraft, planNextSession, type Decision, type ProgramState, type Session, type SessionPlan, type Settings } from '../engine';
 import { db, requestPersistence } from './db';
 import { abandonStaleDrafts, ensureSettings } from './store';
 
@@ -32,7 +32,7 @@ export function useProgram(): Program | null {
   }, []);
 
   const stored = useLiveQuery(() => db.settings.get('settings'), []);
-  const settings = useMemo(() => (stored ? { ...defaultSettings(), ...stored } : undefined), [stored]);
+  const settings = useMemo(() => (stored ? withDefaults(stored) : undefined), [stored]);
   const sessions = useLiveQuery(() => db.sessions.toArray(), []);
   const decisions = useLiveQuery(() => db.decisions.toArray(), []);
 
