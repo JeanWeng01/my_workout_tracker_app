@@ -606,7 +606,7 @@ describe('5/3/1', () => {
     for (let i = 0; i < 5; i++) {
       const p = planNextSession(one.state(), one.settings, TODAY);
       order.push(p.lifts.map((l) => l.lift).join('+'));
-      one.log(p.lifts.map((l) => waveLift(l.lift, l.waveWeek ?? 1, 100, 5)), '531');
+      one.log(p.lifts.map((l) => waveLift(l.slot, l.waveWeek ?? 1, 100, 5)), '531');
     }
     expect(order).toEqual(['squat', 'bench', 'deadlift', 'ohp', 'squat']);
     expect(one.state().wave.squat.step).toBe(2);
@@ -617,7 +617,7 @@ describe('5/3/1', () => {
     for (let i = 0; i < 4; i++) {
       const p = planNextSession(two.state(), two.settings, TODAY);
       order2.push(p.lifts.map((l) => l.lift).join('+'));
-      two.log(p.lifts.map((l) => waveLift(l.lift, l.waveWeek ?? 1, 100, 5)), '531');
+      two.log(p.lifts.map((l) => waveLift(l.slot, l.waveWeek ?? 1, 100, 5)), '531');
     }
     expect(order2).toEqual(['squat+bench', 'deadlift+ohp', 'squat+bench', 'deadlift+ohp']);
     expect(two.state().wave.squat.step).toBe(2);

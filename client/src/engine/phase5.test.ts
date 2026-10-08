@@ -148,7 +148,7 @@ describe('workout notes in the CSV', () => {
     expect(text).toContain('"Left knee clicky, felt strong.\nTry ""slower"" eccentrics, next time"');
     expect(text.split('Left knee clicky').length - 1).toBe(1); // exactly once
     const header = text.split('\r\n')[0].split(',');
-    expect(header[header.length - 1]).toBe('notes');
+    expect(header[18]).toBe('notes'); // unchanged position; the shoulder columns follow it
     const firstRow = text.split('\r\n')[1];
     expect(firstRow.includes('Left knee clicky')).toBe(true);
   });

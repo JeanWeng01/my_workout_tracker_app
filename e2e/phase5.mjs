@@ -94,10 +94,11 @@ await page.getByRole('heading', { name: 'Settings' }).waitFor();
 await shot('12-settings');
 const settingsText = await page.locator('body').innerText();
 check('microplate toggle present while off', settingsText.includes('1.25 lb microplates'));
-await page.getByRole('button', { name: 'Off' }).click();
-await page.getByRole('button', { name: 'On', exact: true }).waitFor({ timeout: 5000 });
+const micro = page.locator('.set-row', { hasText: 'microplates' }).getByRole('button');
+await micro.click();
+await micro.filter({ hasText: 'On' }).waitFor({ timeout: 5000 });
 check('microplate toggle turns on', true);
-await page.getByRole('button', { name: 'On', exact: true }).click();
+await micro.click();
 
 // CSV
 const [csvDl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export CSV' }).click()]);
@@ -121,7 +122,6 @@ await page.getByText('Backup restored.').waitFor();
 check('restore succeeds', true);
 
 // About the rules: must not mention microplate stuff while the toggle is off
-await page.getByRole('button', { name: 'Off' }).count();
 await page.getByRole('button', { name: 'About the rules' }).click();
 const about = await page.locator('body').innerText();
 check('About the rules renders', about.includes('The big idea'));

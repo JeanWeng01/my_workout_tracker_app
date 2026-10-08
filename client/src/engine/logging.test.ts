@@ -9,6 +9,7 @@ import { deriveState } from './state';
 
 const settings = defaultSettings('2026-01-01T00:00:00Z');
 settings.startingWeights.squat = 200;
+settings.shoulder.tracking = false; // these tests cover the barbell basics; shoulder extras have their own tests
 const plan = planNextSession(deriveState(settings, [], []), settings, '2026-01-02');
 const fresh = () => draftFromPlan(plan, settings, 'd1', '2026-01-02T10:00:00Z', '2026-01-02');
 const firstWork = (s: ReturnType<typeof fresh>, li = 0) => s.lifts[li].sets.findIndex((x) => x.type === 'work');
@@ -204,7 +205,10 @@ describe('automatic finish', () => {
     const s531 = { ...settings, template: 'fsl' as const };
     const st = deriveState(s531, [], []);
     st.phase = '531';
-    for (const l of ['squat', 'bench', 'deadlift', 'ohp'] as const) st.wave[l].tm = 200;
+    for (const l of ['squat', 'bench', 'deadlift', 'ohp'] as const) {
+      st.wave[l].tm = 200;
+      st.track[l] = '531';
+    }
     const plan531 = planNextSession(st, s531, '2026-01-02');
     let d = draftFromPlan(plan531, s531, 'w1', '2026-01-02T10:00:00Z', '2026-01-02');
     d.lifts[0].sets.forEach((x, si) => {

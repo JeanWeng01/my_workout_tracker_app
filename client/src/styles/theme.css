@@ -223,3 +223,24 @@ body {
   .celebrate { animation: pop 220ms ease-out; }
   @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 }
+
+/* Shoulder check, rehab cards, accessories */
+.shoulder { margin: 14px 0 6px; }
+.shoulder-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.zone { font-weight: 800; padding: 2px 12px; border-radius: 999px; font-size: 17px; }
+.zone-green { background: #1a7f37; color: #fff; }
+.zone-amber { background: #f2c230; color: var(--ink); }
+.zone-red { background: #b3261e; color: #fff; }
+.rating-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rate {
+  width: 48px; height: 48px; border-radius: 12px; border: 2px solid var(--iron);
+  background: transparent; color: var(--ink); font: inherit; font-weight: 800; font-size: 20px; cursor: pointer;
+}
+.rate.on.z-green { background: #1a7f37; border-color: #1a7f37; color: #fff; }
+.rate.on.z-amber { background: #f2c230; border-color: #8a4b00; color: var(--ink); }
+.rate.on.z-red { background: #b3261e; border-color: #b3261e; color: #fff; }
+.pill:disabled { opacity: 0.55; cursor: default; }
+.acc { margin-top: 14px; padding-top: 8px; border-top: 1px solid var(--lavender); }
+.acc-title { font-weight: 700; color: var(--ink); }
+.card-weight.dumbbell { font-size: 26px; text-align: right; }
+.weight-big.dumbbell { font-size: 30px; min-width: 150px; }

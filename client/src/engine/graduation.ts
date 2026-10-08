@@ -10,7 +10,7 @@ export function computeTrainingMaxes(settings: Settings, sessions: Session[]): R
   const out = {} as Record<MainLift, number>;
   for (const lift of MAIN_LIFTS) {
     const recent = ordered
-      .filter((s) => s.lifts.some((l) => l.lift === lift && !l.skipped && l.sets.some((x) => x.done)))
+      .filter((s) => s.lifts.some((l) => l.lift === lift && !l.skipped && l.sets.some((x) => x.done && (x.type === 'work' || x.type === 'amrap'))))
       .slice(-6);
     let best = 0;
     for (const s of recent) {

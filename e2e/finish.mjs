@@ -19,6 +19,10 @@ const NOTE = 'Left knee clicky, felt strong.';
 
 await page.goto(URL);
 await page.getByText('Ego lifts').waitFor();
+// This test is about the auto-finish popup, so take the shoulder extras (ratings, accessories) out of the way.
+await page.getByRole('button', { name: 'Settings' }).click();
+await page.locator('.set-row', { hasText: 'Shoulder tracking' }).getByRole('button').click();
+await page.getByRole('button', { name: '← Home' }).click();
 await page.getByRole('button', { name: 'Start workout' }).click();
 await page.getByRole('button', { name: /Squat/ }).waitFor();
 
@@ -45,7 +49,7 @@ await page.screenshot({ path: 'shots/30-note.png' });
 
 // Tap every work set, in all three lifts. "Not yet" holds the auto-finish.
 const completeAll = async () => {
-  for (const name of [/Squat/, /Bench Press/, /Barbell Row/]) {
+  for (const name of [/Squat/, /DB Floor Press/, /Barbell Row/]) {
     const card = page.getByRole('button', { name }).first();
     if ((await card.getAttribute('aria-expanded')) !== 'true') await card.click();
   }
@@ -79,7 +83,7 @@ await page.getByRole('button', { name: 'Settings' }).click();
 const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export CSV' }).click()]);
 const csv = readFileSync(await dl.path(), 'utf8');
 const lines = csv.slice(1).split('\r\n').filter(Boolean);
-check('CSV header ends with notes', lines[0].endsWith(',notes'));
+check('CSV header has notes then the pain columns', lines[0].endsWith(',notes,pain_0_10,pain_sharp'));
 check('note appears exactly once in the CSV', csv.split(NOTE).length - 1 === 1);
 check('...on the first data row', lines[1].includes(NOTE));
 

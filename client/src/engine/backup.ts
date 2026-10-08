@@ -1,5 +1,5 @@
 import { SCHEMA_VERSION } from './defaults';
-import { ALL_LIFTS, type Decision, type Session, type Settings } from './types';
+import { ALL_LIFTS, REHAB_EXERCISES, type Decision, type Session, type Settings } from './types';
 
 export interface Backup {
   app: 'bulletproof';
@@ -30,8 +30,9 @@ export function backupFilename(date = new Date()): string {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const SET_TYPES = ['warmup', 'work', 'amrap', 'supplemental'];
-const DECISION_KINDS = ['alert_response', 'phase_switch', 'set_tm', 'override_7th', 'restart_linear'];
+const SET_TYPES = ['warmup', 'work', 'amrap', 'supplemental', 'prep', 'accessory'];
+const EXERCISES: string[] = [...ALL_LIFTS, ...REHAB_EXERCISES];
+const DECISION_KINDS = ['alert_response', 'phase_switch', 'set_tm', 'override_7th', 'restart_linear', 'track_change', 'pause_lift', 'resume_lift'];
 
 export type BackupCheck = { ok: true; data: Backup } | { ok: false; errors: string[] };
 
@@ -57,7 +58,7 @@ export function validateBackup(raw: unknown): BackupCheck {
       if (s.phase !== 'linear' && s.phase !== '531') bad(`Session ${i + 1}: bad phase.`);
       if (!Array.isArray(s.lifts)) return void bad(`Session ${i + 1}: lifts missing.`);
       s.lifts.forEach((l: unknown, j: number) => {
-        if (!isObj(l) || !ALL_LIFTS.includes(l.lift as never) || !isStr(l.scheme) || !Array.isArray(l.sets)) return void bad(`Session ${i + 1}, lift ${j + 1}: malformed.`);
+        if (!isObj(l) || !EXERCISES.includes(l.lift as string) || !isStr(l.scheme) || !Array.isArray(l.sets)) return void bad(`Session ${i + 1}, lift ${j + 1}: malformed.`);
         l.sets.forEach((x: unknown, k: number) => {
           if (!isObj(x) || !SET_TYPES.includes(x.type as string) || !isNum(x.weight) || !isNum(x.reps) || typeof x.done !== 'boolean') bad(`Session ${i + 1}, lift ${j + 1}, set ${k + 1}: malformed.`);
         });

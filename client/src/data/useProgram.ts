@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo } from 'react';
 import { withDefaults, deriveState, isActiveDraft, planNextSession, type Decision, type ProgramState, type Session, type SessionPlan, type Settings } from '../engine';
 import { db, requestPersistence } from './db';
-import { abandonStaleDrafts, ensureSettings } from './store';
+import { abandonStaleDrafts, runMigrations } from './store';
 
 export interface Program {
   ready: boolean;
@@ -23,7 +23,7 @@ function today(): string {
 /** Live view of everything: state and plan are always re-derived from the logged history. */
 export function useProgram(): Program | null {
   useEffect(() => {
-    void ensureSettings();
+    void runMigrations();
     void requestPersistence();
     void abandonStaleDrafts();
     const onVisible = () => document.visibilityState === 'visible' && void abandonStaleDrafts();

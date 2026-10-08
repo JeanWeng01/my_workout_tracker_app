@@ -8,6 +8,9 @@ import { Mantra } from './Mantra';
 export function Congrats({ program, onDone }: { program: Program; onDone: () => void }) {
   const [adjusting, setAdjusting] = useState(false);
   const tms = program.state.wave;
+  // Only lifts that actually switched get a training max; the ones still on shoulder rehab say so.
+  const switched = MAIN_LIFTS.filter((l) => program.state.track[l] === '531');
+  const onRehab = MAIN_LIFTS.filter((l) => program.state.track[l] === 'rehab');
   const step = program.settings.microplates ? 2.5 : 5;
 
   const change = (lift: MainLift, delta: number) =>
@@ -24,7 +27,7 @@ export function Congrats({ program, onDone }: { program: Program; onDone: () => 
         </p>
         <div className="label">Your training maxes:</div>
         {adjusting ? (
-          MAIN_LIFTS.map((l) => (
+          switched.map((l) => (
             <div className="weight-edit" key={l}>
               <span style={{ width: 90, fontWeight: 700 }}>{LIFT_SHORT[l]}</span>
               <button className="step-btn" aria-label={`Lower ${LIFT_SHORT[l]} training max`} onClick={() => change(l, -step)}>−</button>
@@ -34,9 +37,12 @@ export function Congrats({ program, onDone }: { program: Program; onDone: () => 
           ))
         ) : (
           <p className="num" style={{ fontWeight: 800, fontSize: 22 }}>
-            {MAIN_LIFTS.map((l) => `${LIFT_SHORT[l]} ${tms[l].tm}`).join(' · ')}
+            {switched.map((l) => `${LIFT_SHORT[l]} ${tms[l].tm}`).join(' · ')}
           </p>
         )}
+        {onRehab.map((l) => (
+          <p className="small" key={l}>{LIFT_SHORT[l]}: still on shoulder rehab</p>
+        ))}
         <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setAdjusting(!adjusting)}>
           {adjusting ? 'Done adjusting' : 'Adjust training maxes'}
         </button>

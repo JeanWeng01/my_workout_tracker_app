@@ -22,6 +22,19 @@ export function AboutRules() {
 
       <h3>Unfinished workouts</h3>
       <p>If you can&apos;t finish a workout, leave it unfinished. That date shows yellow on the calendar, nothing from it counts, and next time you redo the same workout from the start.</p>
+
+      <h3>Shoulder rehab</h3>
+      <p>While your shoulder recovers, Bench and Overhead Press are replaced by neutral-grip dumbbell versions: DB floor press and seated DB overhead press. They have their own history, and your barbell history is left alone. Each lift sits on one of three tracks: shoulder rehab, barbell linear, or 5/3/1, and you can move any lift between them in Settings.</p>
+      <p>Rehab sets use reps before weight: 3 × 10, then 3 × 12, then 3 × 15 at the same dumbbells, then the next weight up at 3 × 10. A step happens only after a completed session with a green shoulder rating. Missed reps, an amber rating or no rating just hold: nothing counts as a stall and nothing is ever deloaded automatically. Dumbbell weights are per hand, and the ladders are yours to edit in Settings.</p>
+      <p>Pace check: each weight takes at least 3 sessions of that exercise, and each press comes up every other workout. At 3 workouts a week the floor press ladder takes about 10 weeks at the fastest, and longer whenever you hold.</p>
+      <p>When you reach the top weight at 3 × 15 with a green shoulder, the app asks whether you want to return to the barbell at a light weight. It never switches by itself, because this is an injury decision. &quot;Not yet&quot; asks again after 3 more sessions.</p>
+
+      <h3>Shoulder check</h3>
+      <p>Rate your shoulder 0 to 10 once per tracked lift per session. 0 to 2 is green (OK), 3 to 4 is amber (Caution) and 5 or more, or anything sharp or pinching, is red (Stop). You can change those cut-offs in Settings.</p>
+      <p>On a barbell lift, amber holds the weight and doesn&apos;t count as a miss; red suggests dropping 10%. Red twice in a row suggests pausing the lift and getting it assessed. In 5/3/1, a red session in a cycle holds that lift&apos;s training max.</p>
+
+      <h3>Shoulder warm-up and accessories</h3>
+      <p>Band pull-aparts sit first in the first card&apos;s Warm-up row. Two shoulder exercises, side-lying external rotation and scaption, appear inside the last card once its main work is done. Each moves up the same way as the rehab presses, gated by your worst shoulder rating that session. Once both Bench and OHP are back on the barbell, they drop to 2 sets for maintenance.</p>
     </div>
   );
 }

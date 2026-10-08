@@ -13,10 +13,15 @@ import {
   liftFromPlan,
   liftsWithUntouched,
   planNextSession,
+  relocateAccessories,
   resolveUntouched,
+  schema2Migration,
+  SCHEMA_VERSION,
+  slotOf,
   type Alert,
   type Backup,
   type Lift,
+  type LoggedLift,
   type Decision,
   type DecisionBody,
   type MainLift,
@@ -37,12 +42,35 @@ function localDate(d = new Date()): string {
 
 export async function ensureSettings(): Promise<Settings> {
   const existing = await db.settings.get('settings');
-  // Fill in fields added by newer versions of the app.
-  if (existing) return withDefaults(existing);
+  // Fill in fields added by newer versions of the app, and write the upgrade back once (schema 2: shoulder settings).
+  if (existing) {
+    const merged = withDefaults(existing);
+    if ((existing.schemaVersion ?? 1) < SCHEMA_VERSION) {
+      const neverSaved = existing.updatedAt.startsWith('1970');
+      await db.settings.put({ ...merged, updatedAt: neverSaved ? existing.updatedAt : nowIso(), dirty: neverSaved ? 0 : 1 });
+      if (!neverSaved) scheduleSync();
+    }
+    return merged;
+  }
   // Epoch timestamp and not dirty: untouched defaults can never overwrite real settings on the server.
   const s = { ...defaultSettings('1970-01-01T00:00:00.000Z'), dirty: 0 as const };
   await db.settings.put(s);
   return s;
+}
+
+/**
+ * One-time data migration for the shoulder update: puts Bench and OHP on the rehab track. Idempotent, and safe on two
+ * devices (the decisions have fixed ids). Never touches a logged session.
+ */
+export async function runMigrations(): Promise<void> {
+  const created = await db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
+    const settings = await ensureSettings();
+    const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
+    const made = schema2Migration(settings, sessions, decisions);
+    if (made.length) await db.decisions.bulkPut(made.map((d) => ({ ...d, dirty: 1 as const })));
+    return made.length;
+  });
+  if (created) scheduleSync();
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
@@ -56,6 +84,7 @@ export async function getDraft(): Promise<Session | undefined> {
 
 /** Creates the draft from the engine's plan, or returns the one already in progress. */
 export async function startWorkout(): Promise<Session> {
+  await runMigrations(); // never plan a workout before the shoulder tracks exist
   return db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
     const existing = await getDraft();
     if (existing) return existing;
@@ -157,41 +186,51 @@ export async function saveDecision(body: DecisionBody): Promise<Decision> {
 }
 
 /**
- * Accept / "Try again next workout". Accepting an alert changes the next weights, so if a draft
- * exists and that lift is still untouched, its sets are rebuilt from the new plan.
+ * After a decision changed the plan: rebuild the lifts of the draft that have not been touched yet (a paused lift that was
+ * just resumed counts too), matched by barbell slot so a lift that changed exercise is replaced. Accessories follow.
  */
-export async function respondToAlert(alert: Alert, choice: 'accept' | 'keep'): Promise<void> {
-  await saveDecision({ kind: 'alert_response', lift: alert.lift, alertKind: alert.kind, choice, value: alert.value });
-  const draft = await getDraft();
-  if (!draft || choice !== 'accept') return;
-  const settings = await ensureSettings();
-  const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
-  const plan = planNextSession(deriveState(settings, sessions, decisions), settings, localDate());
-  await updateDraft(draft.id, (s) => ({
-    ...s,
-    lifts: s.lifts.map((l) => {
-      const fresh = plan.lifts.find((p) => p.lift === l.lift);
-      const untouched = !l.sets.some((x) => x.done);
-      return fresh && untouched && !l.skipped ? liftFromPlan(fresh) : l;
-    }),
-  }));
-}
-
-/** 7th-week "Change": saves the override, and rebuilds the lift in an untouched draft. */
-export async function changeSeventhWeek(lift: MainLift, sevenType: SevenType): Promise<void> {
-  await saveDecision({ kind: 'override_7th', lift, sevenType });
+async function refreshDraftFromPlan(only?: (l: LoggedLift) => boolean): Promise<void> {
   const draft = await getDraft();
   if (!draft) return;
   const settings = await ensureSettings();
   const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
   const plan = planNextSession(deriveState(settings, sessions, decisions), settings, localDate());
-  await updateDraft(draft.id, (s) => ({
-    ...s,
-    lifts: s.lifts.map((l) => {
-      const fresh = plan.lifts.find((p) => p.lift === l.lift);
-      return fresh && l.lift === lift && !l.sets.some((x) => x.done) ? liftFromPlan(fresh) : l;
+  await updateDraft(draft.id, (s) =>
+    relocateAccessories({
+      ...s,
+      lifts: s.lifts.map((l) => {
+        if (only && !only(l)) return l;
+        const fresh = plan.lifts.find((p) => slotOf(p.lift) === slotOf(l.lift));
+        const untouched = !l.sets.some((x) => x.done) && !l.pain;
+        return fresh && (l.paused || (!l.skipped && untouched)) ? liftFromPlan(fresh) : l;
+      }),
     }),
-  }));
+  );
+}
+
+/**
+ * Accept / "Try again next workout". Accepting an alert changes the next weights, so if a draft
+ * exists and that lift is still untouched, its sets are rebuilt from the new plan.
+ */
+export async function respondToAlert(alert: Alert, choice: 'accept' | 'keep'): Promise<void> {
+  await saveDecision({ kind: 'alert_response', lift: alert.lift, alertKind: alert.kind, choice, value: alert.value });
+  if (choice === 'accept') await refreshDraftFromPlan();
+}
+
+/** 7th-week "Change": saves the override, and rebuilds the lift in an untouched draft. */
+export async function changeSeventhWeek(lift: MainLift, sevenType: SevenType): Promise<void> {
+  await saveDecision({ kind: 'override_7th', lift, sevenType });
+  await refreshDraftFromPlan((l) => l.lift === lift);
+}
+
+/** Track override, pause and resume from Settings. A draft in progress picks the change up for untouched lifts. */
+export async function changeTrack(lift: MainLift, to: 'rehab' | 'linear' | '531', startWeight?: number): Promise<void> {
+  await saveDecision({ kind: 'track_change', lift, to, startWeight });
+  await refreshDraftFromPlan((l) => slotOf(l.lift) === lift);
+}
+export async function resumeLift(lift: MainLift): Promise<void> {
+  await saveDecision({ kind: 'resume_lift', lift });
+  await refreshDraftFromPlan((l) => slotOf(l.lift) === lift);
 }
 
 /** Template switch applies from the next session; a draft in progress is untouched. */
@@ -239,6 +278,7 @@ export async function restoreBackup(b: Backup): Promise<void> {
     await db.decisions.bulkPut(b.decisions.map((d) => ({ ...d, updatedAt: stamp, dirty: 1 as const })));
   });
   scheduleSync();
+  await runMigrations(); // an older backup has no track decisions yet
 }
 
 export async function loadEverything() {

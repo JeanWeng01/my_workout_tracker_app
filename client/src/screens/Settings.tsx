@@ -9,48 +9,10 @@ import {
 import { AboutRules } from './AboutRules';
 import { shareOrDownload } from './fileio';
 import { Mantra } from './Mantra';
+import { Group, NumRow, Pills } from './SettingsWidgets';
+import { ShoulderGroups, TrackGroup } from './ShoulderSettings';
 
 type View = 'main' | 'switch' | 'restart' | 'about';
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="bubble set-group">
-      <h3 className="set-title">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function NumRow({ label, value, step, min, max, suffix, onChange }: {
-  label: string; value: number; step: number; min: number; max: number; suffix?: string; onChange: (n: number) => void;
-}) {
-  const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n * 100) / 100));
-  return (
-    <div className="set-row">
-      <span className="set-label">{label}</span>
-      <span className="set-ctl">
-        <button className="step-btn sm" aria-label={`${label} minus`} onClick={() => onChange(clamp(value - step))}>−</button>
-        <span className="num set-val">{value}{suffix}</span>
-        <button className="step-btn sm" aria-label={`${label} plus`} onClick={() => onChange(clamp(value + step))}>+</button>
-      </span>
-    </div>
-  );
-}
-
-function Pills<T extends string | number>({ label, value, options, onChange }: {
-  label: string; value: T; options: [T, string][]; onChange: (v: T) => void;
-}) {
-  return (
-    <div className="set-block">
-      <div className="set-label">{label}</div>
-      <div className="template-row">
-        {options.map(([v, name]) => (
-          <button key={String(v)} className={`pill${value === v ? ' on' : ''}`} aria-pressed={value === v} onClick={() => onChange(v)}>{name}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 const PLATE_CHOICES = [45, 35, 25, 10, 5, 2.5];
 
@@ -116,6 +78,8 @@ export function SettingsScreen({ program, onBack }: { program: Program; onBack: 
         <Pills label="7th week deload style" value={s.deloadStyle} onChange={(v) => set({ deloadStyle: v })} options={[['forever', 'Forever deload'], ['light', 'Light deload']]} />
       </Group>
 
+      <ShoulderGroups program={program} set={set} />
+
       <Group title="Rest timer">
         <NumRow label="After warm-up sets" value={s.restSeconds.warmup} step={15} min={0} max={600} suffix="s" onChange={(n) => set({ restSeconds: { ...s.restSeconds, warmup: n } })} />
         <NumRow label="After work sets" value={s.restSeconds.work} step={15} min={0} max={600} suffix="s" onChange={(n) => set({ restSeconds: { ...s.restSeconds, work: n } })} />
@@ -132,6 +96,8 @@ export function SettingsScreen({ program, onBack }: { program: Program; onBack: 
         </button>
         <button className="btn-link" onClick={() => setView('restart')}>Restart linear phase…</button>
       </Group>
+
+      <TrackGroup program={program} />
 
       <Group title="Sync">
         <label className="set-label" htmlFor="tok">Sync token</label>
