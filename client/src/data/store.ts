@@ -13,7 +13,6 @@ import {
   liftFromPlan,
   liftsWithUntouched,
   planNextSession,
-  relocateAccessories,
   resolveUntouched,
   schema2Migration,
   SCHEMA_VERSION,
@@ -143,11 +142,11 @@ export function needsUntouchedChoice(s: Session): boolean {
   return liftsWithUntouched(s).length > 0;
 }
 
-export async function finishWorkout(id: string, untouched: 'missed' | 'skip'): Promise<FinishResult> {
+export async function finishWorkout(id: string): Promise<FinishResult> {
   return db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
     const cur = await db.sessions.get(id);
     if (!cur || cur.finishedAt !== null) return { graduated: false, discarded: false };
-    const resolved = resolveUntouched(cur, untouched);
+    const resolved = resolveUntouched(cur);
     if (isEmptyDraft(resolved)) {
       await db.sessions.delete(id);
       return { graduated: false, discarded: true };
@@ -195,8 +194,7 @@ async function refreshDraftFromPlan(only?: (l: LoggedLift) => boolean): Promise<
   const settings = await ensureSettings();
   const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
   const plan = planNextSession(deriveState(settings, sessions, decisions), settings, localDate());
-  await updateDraft(draft.id, (s) =>
-    relocateAccessories({
+  await updateDraft(draft.id, (s) => ({
       ...s,
       lifts: s.lifts.map((l) => {
         if (only && !only(l)) return l;
@@ -204,8 +202,7 @@ async function refreshDraftFromPlan(only?: (l: LoggedLift) => boolean): Promise<
         const untouched = !l.sets.some((x) => x.done) && !l.pain;
         return fresh && (l.paused || (!l.skipped && untouched)) ? liftFromPlan(fresh) : l;
       }),
-    }),
-  );
+  }));
 }
 
 /**

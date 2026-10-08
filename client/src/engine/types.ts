@@ -291,8 +291,6 @@ export interface RehabState {
   /** Rep target lifted last time. */
   reps: number;
   next: RehabNext;
-  /** Consecutive sessions flagged red. */
-  reds: number;
   /** Sessions of this exercise so far. */
   sessions: number;
   /** "Not yet" on the return-to-barbell question: ask again once `sessions` reaches this. */

@@ -7,7 +7,7 @@ export function AboutRules() {
 
       <h3>Phase 1: linear progression</h3>
       <p>Workouts alternate A, B, A, B no matter which day it is. Skipping a day changes nothing. Squat, bench, row and overhead press go up 5 lb after a completed session. Deadlift goes up 10 lb until the first session where you miss reps, then 5 lb.</p>
-      <p><b>Completed</b> means every planned work set hit its target reps, judged lift by lift. <b>Missed reps</b> means you did the lift but fell short. <b>Skipped</b> means you didn&apos;t do it, and that never counts against you.</p>
+      <p><b>Completed</b> means every planned work set hit its target reps, judged lift by lift. <b>Missed reps</b> means you did the lift but fell short. There is no skipping a lift: a workout is done in whole or not at all.</p>
       <p>Miss reps three sessions in a row at the same weight and it&apos;s a stall. The ladder is: dial down 10% and climb back, twice. A third stall switches 5×5 to 3×5 at the same weight. A third stall at 3×5 means linear progression is done for that lift, and it holds steady, deloading 10% on later stalls. Deadlift is 1×5 and skips the 3×5 step. Rows follow the ladder but never decide when you move on.</p>
       <p>When squat finishes linear progression, the whole program moves to 5/3/1. Squat is trained every session at full volume, so it carries most of the recovery cost. When squat can no longer go up session to session, the program has outgrown linear progression.</p>
 
@@ -21,7 +21,7 @@ export function AboutRules() {
       <p>Warm-ups are suggestions only and never affect whether a lift counts as completed. Plates per side use only the plates you own. After more than 14 days away from a lift, the app suggests a lighter start (10% for 15 to 28 days, 20% beyond that). You can accept or keep your numbers.</p>
 
       <h3>Unfinished workouts</h3>
-      <p>If you can&apos;t finish a workout, leave it unfinished. That date shows yellow on the calendar, nothing from it counts, and next time you redo the same workout from the start.</p>
+      <p>If you can&apos;t finish a workout, leave it unfinished. That date shows yellow on the calendar, nothing from it counts, and next time you redo the same workout from the start. A workout you leave open and don&apos;t finish within 12 hours resets the same way.</p>
 
       <h3>Shoulder rehab</h3>
       <p>While your shoulder recovers, Bench and Overhead Press are replaced by neutral-grip dumbbell versions: DB floor press and seated DB overhead press. They have their own history, and your barbell history is left alone. Each lift sits on one of three tracks: shoulder rehab, barbell linear, or 5/3/1, and you can move any lift between them in Settings.</p>

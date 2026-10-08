@@ -196,7 +196,7 @@ Under the Barbell Row field, add a second hint: "New to rows? Start with the emp
 **Terminology (use these words consistently in code and UI copy):**
 - **Completed:** every planned work set for that lift reached its target reps. Evaluated **per lift**, not per workout: squat can be completed while bench has missed reps in the same session.
 - **Missed reps:** the lift was performed, but at least one work set came up short of target reps.
-- **Skipped:** the lift wasn't performed (I tapped "Skip lift", or skipped it at Finish). **Skipped never counts toward a stall** and doesn't change state.
+- **Skipped:** the lift wasn't performed. **There is no way to skip a lift.** A lift is "skipped" only when the app itself leaves it out because it is **paused** (see 4.8), and in old history from before this rule. Skipped never counts toward a stall and doesn't change state.
 - A **workout that didn't happen** isn't recorded and has no effect on progression (but see 4.7 for long breaks).
 - **Working weight:** the lowest weight among that lift's logged work sets.
 
@@ -242,7 +242,7 @@ Example: best set 180 × 5 → e1RM 210 → TM at 85% = 178.5 → **175**.
 
 **Session structure:**
 - `liftsPerSession = 1` (default): each session trains one main lift, rotating **Squat → Bench → Deadlift → OHP → Squat…**
-- **No skipping a main lift in 5/3/1** (no Skip lift button in this phase). The only alternative to finishing is leaving the whole workout unfinished (see 6.2). Rotation continues after the last lift actually performed, so an unfinished workout simply comes up again.
+- **No skipping a lift, in any phase.** The only alternative to finishing a workout is leaving the whole workout unfinished (see 6.2), and an unfinished workout is redone **in whole** next time. Rotation continues after the last lift actually performed, so an unfinished workout simply comes up again.
 - `liftsPerSession = 2`: sessions alternate **A: Squat + Bench**, **B: Deadlift + OHP**.
 
 **Each lift tracks its own position in the wave**, advancing one step each time that lift is trained. Missed calendar days never break anything.
@@ -334,7 +334,7 @@ State per exercise: the weight and reps **lifted last time**, plus **what happen
 - **Completed** (all sets reached the rep target) **+ green** (or tracking off): not at the top rep step → same weight, next rep step; at the top rep step → next ladder weight at the first rep step.
 - **Hold** (repeat same weight and reps) on missed reps, **amber**, or **no rating while tracking is on**. Holding is never a stall; there is no automatic deload on rehab.
 - **Red** → alert "Shoulder rated 6. Drop back to 2 × 15 lb for 3 × 10?" **Accept** (one ladder rung down at the first rep step; on the first rung, the same weight at 3 × 10) / **Try again next workout** (repeat exactly what was lifted).
-- **Red in 2 consecutive sessions** of that exercise → "Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing." **Pause this lift** / **Keep going**. A paused lift shows as "Paused" and is skipped automatically (in the linear layout it stays listed as paused; the 5/3/1 rotation passes over it) until **resumed in Settings**. A calm session resets the red streak.
+- **Every red gets the same single drop-back question**, even red sessions in a row (there is no pause on the rehab track, and no red-streak counting). Accepting each time walks down one rung at a time and stops at the first rung.
 
 Pace check: each weight takes at least 3 sessions of that exercise and each press comes up every other workout, so at 3 workouts a week the floor-press ladder takes about 10 weeks at the fastest, longer with holds.
 
@@ -355,7 +355,7 @@ The squat-only trigger is unchanged. Lifts on `linear` at the switch go to `531`
 - In an expanded card of a tracked lift, below the set chips: a **Shoulder** row with chips **0–10** and a **Sharp / pinching** toggle (enabled once a rating is chosen). One rating per lift per session. The chosen chip takes the zone colour **and** the zone name appears beside the label: **OK**, **Caution**, **Stop**.
 - **Zones** (editable): green 0–2, amber 3–4, red 5+ **or** Sharp / pinching.
 - **Asking at the end:** when the last set goes green, or when **Finish workout** is tapped, each tracked lift that has work logged but no rating gets "Rate your shoulder for DB Floor Press?" with the chips inline and **Skip**. Only after the last one is rated or skipped does the "Workout complete" popup run. Skipped = no rating.
-- **Effects.** *Rehab:* above. *Linear (tracked lifts):* green or no rating → normal rules; **amber → hold the weight** (not a miss, not toward a stall, even if reps were missed); **red → alert suggesting a 10% deload** (Accept / Try again next workout; never an increase); red twice in a row → the pause alert above. *531 (tracked lifts):* any **red** session in a cycle → that lift's TM is held at cycle end (no increase, not counted as a missed cycle), info alert; amber is logged only.
+- **Effects.** *Rehab:* above. *Linear (tracked lifts):* green or no rating → normal rules; **amber → hold the weight** (not a miss, not toward a stall, even if reps were missed); **red → alert suggesting a 10% deload** (Accept / Try again next workout; never an increase); red twice in a row → "Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing." **Pause this lift** / **Keep going** (this replaces the single-red deload question; a paused lift shows as "Paused", is left out of the workout by the app, and the 5/3/1 rotation passes over it, until **resumed in Settings → Lift tracks**; it applies to barbell lifts only). *531 (tracked lifts):* any **red** session in a cycle → that lift's TM is held at cycle end (no increase, not counted as a missed cycle), info alert; amber is logged only.
 - A session keeps the zone rules it was played under (snapshot), like every other rule.
 
 #### Band pull-aparts (warm-up, first card)
@@ -369,8 +369,8 @@ While Shoulder tracking is on, the **first lift card** of every workout gets **B
 | Side-lying DB external rotation (per arm) | "Towel under elbow, hold 2 s" | 3 → 5 → 8 → 10 → 12 |
 | DB scaption | "Thumbs up, 45°, to shoulder height" | 3 → 5 → 8 → 10 → 12 → 15 |
 
-- They ride inside the **last non-skipped lift card** of the workout (linear: Row in A, Deadlift in B; 5/3/1: the last lift that session) as second, smaller chip rows, one per exercise. If that lift is skipped they move to the previous card (and back if it is un-skipped).
-- **Hidden until that card's main work is done** (its last work and supplemental set tapped). The collapsed card never mentions them. They **count as required for the automatic finish** (the workout cannot complete itself before they are done). Untouched accessories appear in the Finish prompt ("Some shoulder work is untouched. Count it as missed, or finish without it?").
+- They ride inside the **last lift card** of the workout (linear: Row in A, Deadlift in B; 5/3/1: the last lift that session; a paused lift never hosts them) as second, smaller chip rows, one per exercise.
+- **Hidden until that card's main work is done** (its last work and supplemental set tapped). The collapsed card never mentions them. They **count as required for the automatic finish** (the workout cannot complete itself before they are done). Untouched accessories appear in the Finish prompt ("Some shoulder work is untouched. Count it as missed, or leave this workout unfinished and redo it from the start?").
 - **Progression** (each exercise has its own weight and rep step, resolved against the current ladder like rehab): 3 sets in **rehab mode** (while Bench or OHP is on rehab), **2 sets in maintenance mode** (once both are off rehab, carrying the current weight and rep step; info alert "Shoulder work drops to 2 sets for maintenance."). Gate = the session's **worst** rating among its tracked, performed lifts: completed + green → step up (reps, then weight); missed reps, amber or **no rating** → hold; **red → drop one rung at the first rep step, automatically**, with a one-line info alert. At the top of the ladder and top rep step with a clean session: stay, with the one-time alert "Scaption is clean at 15 lb for 3 × 15. Add a heavier dumbbell in Settings to keep progressing."
 - Ladders, sets per mode and rep steps are Settings. Exported with `set_type = accessory`.
 
@@ -409,7 +409,7 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
 | Rehab weight step up | "3 × 15 done with a happy shoulder. Next time: 2 × 17.5 lb for 3 × 10." (info) |
 | Rehab hold | "Holding at 2 × 15 lb for 3 × 12 (shoulder rated 3)." (info; also "missed reps" / "no shoulder rating") |
 | Rehab red | "Shoulder rated 6. Drop back to 2 × 15 lb for 3 × 10?" (Accept / Try again next workout) |
-| Two reds | "Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing." (Pause this lift / Keep going) |
+| Two reds (barbell lifts only) | "Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing." (Pause this lift / Keep going) |
 | Return to barbell | "Your shoulder has handled 2 × 30 lb for 3 × 15 cleanly. Ready to return to the barbell bench press at 55 lb?" (Return to barbell / Not yet) |
 | Linear amber | "Shoulder rated 3, so bench holds at 60 next time. This doesn't count as a miss." (info) |
 | Linear red | "Shoulder rated 5. Dial bench down to 55?" (Accept / Try again next workout) |
@@ -468,12 +468,11 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
   - **Warm-up sets** (4.5) are listed under a collapsed "Warm-up (N sets)" row, each with suggested weight × reps and its own complete button. Completing one starts the rest timer too.
   - **Rest timer:** a silent countdown bar pinned to the bottom of the screen, started by any complete tap. Wall-clock based (survives a locked screen). No buttons, no sound, no vibration: it only counts down, reads "Ready" at zero, and hides itself a few seconds later. Default rests: warm-up 60 s, work sets 90 s, supplemental 90 s (editable in Settings, phase 5).
   - Supplemental sets (FSL/BBB) as a second, slightly smaller chip row.
-  - "Skip lift" text button (**linear phase only**).
 - **Shoulder additions (4.8).** A rehab card shows the weight per hand ("2 × 15 lb"), its set chips, the cue `Lower for 3 s` and the Shoulder row; nothing else. Tracked lifts show the **Shoulder** row (0–10 chips, Sharp / pinching toggle, zone name) below their chips. The first card's Warm-up row starts with the band pull-aparts. The last card shows the shoulder accessories only after its main work is done. A paused lift reads "Paused" and is skipped. **Before the workout completes itself (or when Finish workout is tapped), unrated tracked lifts are asked about one by one ("Rate your shoulder for …?", with Skip); only then does the popup run.** The screen stays awake while a workout is open.
-- **Unfinished workouts.** A "Can't finish today" link under Finish workout leaves the workout unfinished (confirm first). If anything was logged, that date becomes a **yellow** day on the calendar; partial sets are kept on the record but never count toward progression, the CSV or the total. If nothing was logged, it just disappears. The next time I start, the same workout is planned again and I **redo it from the start** (a fresh workout, not a resume). When that redo is finished, its date is **green**; the old yellow day stays yellow. Closing the app without exiting resumes the workout, but a draft untouched for 12+ hours becomes unfinished automatically on next open. Home shows "Last workout was left unfinished. Starting it over from the top."
+- **Unfinished workouts.** A "Can't finish today" link under Finish workout leaves the workout unfinished (confirm first). If anything was logged, that date becomes a **yellow** day on the calendar; partial sets are kept on the record but never count toward progression, the CSV or the total. If nothing was logged, it just disappears. The next time I start, the same workout is planned again and I **redo it from the start** (a fresh workout, not a resume). When that redo is finished, its date is **green**; the old yellow day stays yellow. **Nothing can be skipped: a workout is done in whole or not at all.** Closing the app without exiting resumes the workout, but **a workout not finished within 12 hours (12 hours without a tap) resets**: on the next open it becomes an unfinished (yellow) day, or simply disappears if nothing was logged, and the same workout is attempted in whole at the next workout. Home shows "Last workout was left unfinished. Starting it over from the top."
 - **Automatic finish.** The moment every planned work set, extra-work (FSL/BBB) set and shoulder accessory set of every lift still in the workout is green (and any pending shoulder ratings have been answered), a "Workout complete! 🎉" popup shows for 2 seconds and the workout finishes by itself and returns to Home (or to the congratulations screen if it graduates the program). Warm-ups, extra sets and skipped lifts do not count. A small "Not yet" link in the popup cancels it for that moment; un-greening a set also cancels it, and the **Finish workout** button always still works.
 - **Note.** On the same row as "Can't finish today" (left), a **Note** link on the right opens a text box for a personal note about this workout (up to 2,000 characters, saved on every keystroke, shown as "Note •" when one exists). It can also be edited from a past workout opened from the calendar. It is exported in the CSV `notes` column as one string, written once on the first row of that session.
-- **Finish workout** button at the bottom. If any work sets are untouched, ask: "Count untouched sets as missed reps, or skip those lifts?"
+- **Finish workout** button at the bottom. If any sets are untouched, ask: "Some sets are untouched. Count them as missed reps, or leave this workout unfinished and redo it from the start?" with **Count as missed reps** / **Leave unfinished** (confirm first). There is no skip option. If only shoulder accessories are untouched the wording is "Some shoulder work is untouched. Count it as missed, or leave this workout unfinished and redo it from the start?"
 - **Bottom of every workout page, smaller:** `My muscles are A-OK, but I invest in bulletproof joints.`
 - Haptic tick on set completion (`navigator.vibrate(10)` where supported).
 
@@ -603,7 +602,7 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 4. Two deloads, then a third stall on 5×5 → "switch to 3×5" alert; accepting keeps the same weight with scheme 3×5.
 5. Third stall on 3×5 → LINEAR COMPLETE. Next stall → holding-pattern deload.
 6. User edits weight up to 160 (suggested 155), completes → next is 165.
-7. Skipped lift → no state change. A completed squat and a missed-reps bench in the same session are evaluated independently.
+7. A completed squat and a missed-reps bench in the same session are evaluated independently. Untouched sets at Finish count as missed (0 reps); nothing can be skipped, and a lift is left out only when the app has paused it.
 8. Missed reps at different weights don't accumulate a streak.
 9. Graduation: the session that makes squat LINEAR COMPLETE auto-creates a `phase_switch` decision, and `planNextSession` returns 5/3/1 Squat week 1 with TMs per 4.3. Bench, Deadlift and OHP all LINEAR COMPLETE while squat isn't → no switch (all three in holding pattern). Manual switch back to linear works.
 10. TM calc: 180 × 5 at 85% → 175. At 90% → 185.
@@ -630,7 +629,7 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 25. Double progression: 3 × 10 → 3 × 12 → 3 × 15 at 15 lb, then 17.5 lb at 3 × 10, each step only after a completed + green session.
 26. Amber, missed reps, or no rating → hold the same weight and reps (never a stall). With tracking off a completed session steps up.
 27. Rehab red → drop-back alert (Accept moves one rung down at 3 × 10; first rung stays at 3 × 10; Keep repeats). Sharp/pinching is always red.
-28. Two consecutive reds → pause alert; Pause makes the lift auto-skipped (linear layout lists it as paused, the 5/3/1 rotation passes over it) until resumed.
+28. On the rehab track two consecutive reds each get the single drop-back question and never a pause. On a barbell tracked lift two consecutive reds → pause alert; Pause makes the lift left out by the app (the linear layout lists it as paused, the 5/3/1 rotation passes over it) until resumed.
 29. Final weight at 3 × 15, completed + green → return alert; "Not yet" asks again after 3 more sessions; "Return" → fresh linear 5×5 at 55 / 45.
 30. Linear tracked lift: amber holds (not a miss, not toward a stall); red suggests a 10% deload and never increases; two reds → pause alert; only tracked lifts are gated.
 31. Squat triggers 5/3/1 while Bench is on rehab: Bench stays rehab in its slot. After returning, Bench runs linear until its first stall, then joins 5/3/1 at block 1, cycle 1, week 1 with its TM per 4.3.
@@ -639,7 +638,7 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 34. CSV has the pain columns, prep and accessory rows with their names, per-hand dumbbell weights; Day 1 barbell rows are unchanged.
 35. Sync round trip of pain ratings, pull-aparts, accessory sets, notes, track/pause/return decisions and the new settings, with no schema change.
 36. The expanded rehab card shows only the weight, the day's chips, the cue and the Shoulder row. Pull-aparts are the first item of the first card's Warm-up row (also with no barbell warm-ups); no extra card exists.
-37. Accessories appear in the last card only after its main work is tapped, move to the previous card when the last lift is skipped, count toward the automatic finish, and appear in the Finish prompt when untouched.
+37. Accessories appear in the last card only after its main work is tapped, count toward the automatic finish, and appear in the Finish prompt when untouched.
 38. Accessory progression: 3 lb 3 × 10 → 3 × 12 → 3 × 15 → 5 lb 3 × 10 only when completed and the session's worst rating is green; amber anywhere or no rating holds; red drops one rung.
 39. Once both presses are back on the barbell, accessories drop to 2 sets at their current weight and rep step (one info alert); the top-of-ladder note is shown once.
 40. The shoulder rating is asked for, one lift at a time, before the "Workout complete" popup; Skip stops the asking.

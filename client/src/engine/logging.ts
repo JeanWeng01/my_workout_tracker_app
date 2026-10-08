@@ -112,30 +112,6 @@ export function setWorkingWeight(s: Session, li: number, weight: number): Sessio
   };
 }
 
-/** Skipping (or un-skipping) a lift. Shoulder accessories move to the last lift that is still in the workout. */
-export function setSkipped(s: Session, li: number, skipped: boolean): Session {
-  return relocateAccessories({ ...s, lifts: s.lifts.map((l, i) => (i === li ? { ...l, skipped } : l)) });
-}
-
-/** The index of the last lift still in the workout (not skipped), or -1. */
-export function lastActiveLift(s: Session): number {
-  for (let i = s.lifts.length - 1; i >= 0; i--) if (!s.lifts[i].skipped) return i;
-  return -1;
-}
-
-/** Keeps every `accessory` set inside the last non-skipped card. If every lift is skipped they stay where they are. */
-export function relocateAccessories(s: Session): Session {
-  const host = lastActiveLift(s);
-  if (host < 0) return s;
-  const moved = s.lifts.flatMap((l) => l.sets.filter((x) => x.type === 'accessory'));
-  if (!moved.length) return s;
-  const lifts = s.lifts.map((l, i) => {
-    const rest = l.sets.filter((x) => x.type !== 'accessory');
-    return i === host ? { ...l, sets: [...rest, ...moved] } : { ...l, sets: rest };
-  });
-  return { ...s, lifts };
-}
-
 /** The accessory row appears only once the host lift's last work and extra-work set has been tapped. */
 export function accessoriesRevealed(l: LoggedLift): boolean {
   const main = l.sets.filter((x) => MAIN_TYPES.includes(x.type) && !x.extra);
@@ -171,28 +147,18 @@ export function hasUntouchedMainWork(s: Session): boolean {
 }
 
 /**
- * Resolve untouched planned sets at Finish.
- * 'missed': they count as 0 reps (missed). Untouched accessories count as missed too.
- * 'skip':   lifts with nothing done are skipped; partly done lifts still count the rest as missed.
- *           Untouched accessories are simply left out.
+ * Finish with sets left untouched: they count as missed (0 reps). There is no way to skip a lift; the other choice is
+ * to leave the whole workout unfinished and redo it from the start (see abandonSession).
  */
-export function resolveUntouched(s: Session, mode: 'missed' | 'skip'): Session {
-  const resolved: Session = {
+export function resolveUntouched(s: Session): Session {
+  return {
     ...s,
     lifts: s.lifts.map((l) => {
-      if (l.skipped) return l;
-      let sets = l.sets;
-      const untouchedMain = sets.some((x) => isPlannedWork(x) && !x.done);
-      if (untouchedMain) {
-        const anyDone = sets.some((x) => isPlannedWork(x) && x.done);
-        if (mode === 'skip' && !anyDone) return { ...l, skipped: true };
-        sets = sets.map((x) => (isPlannedWork(x) && !x.done ? { ...x, done: true, reps: 0 } : x));
-      }
-      if (mode === 'missed') sets = sets.map((x) => (isAccessory(x) && !x.done ? { ...x, done: true, reps: 0 } : x));
-      return sets === l.sets ? l : { ...l, sets };
+      if (l.skipped) return l; // a paused lift is skipped by the app, never by the lifter
+      const sets = l.sets.map((x) => ((isPlannedWork(x) || isAccessory(x)) && !x.done ? { ...x, done: true, reps: 0 } : x));
+      return { ...l, sets };
     }),
   };
-  return relocateAccessories(resolved);
 }
 
 export function finishSession(s: Session, nowIso: string): Session {

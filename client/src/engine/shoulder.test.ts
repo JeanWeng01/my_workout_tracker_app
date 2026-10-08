@@ -10,7 +10,6 @@ import {
   liftsWithUntouched,
   resolveUntouched,
   setPain,
-  setSkipped,
   skipPain,
   toggleSet,
 } from './logging';
@@ -199,28 +198,49 @@ describe('4. red on the rehab track', () => {
     expect(alertFor(t, ex)?.message).toContain('sharp');
   });
 
-  it('a calm session resets the red streak', () => {
-    const t = new Timeline();
-    goRehab(t, ['bench']);
-    logRehab(t, 15, 10, 6);
-    logRehab(t, 15, 10, 1);
-    logRehab(t, 15, 12, 6);
-    expect(alertFor(t, ex)?.kind).toBe('rehab_red'); // one red since the calm session, not two
-  });
 });
 
-describe('5. two reds in a row: pause', () => {
-  function twoReds() {
+describe('5. rehab red is always the single drop-back (no pause on rehab)', () => {
+  it('two reds in a row each get the same drop-back question, never a pause', () => {
     const t = day1();
     goRehab(t, ['bench']);
     logRehab(t, 15, 10, 6);
+    expect(alertFor(t, ex)?.kind).toBe('rehab_red');
     logRehab(t, 15, 10, 7);
+    const a = alertFor(t, ex)!;
+    expect(a.kind).toBe('rehab_red');
+    expect(a.message).toBe('Shoulder rated 7. Drop back to 2 × 15 lb for 3 × 10?');
+    expect(a.severity).toBe('action');
+    expect(t.state().paused.bench).toBe(false);
+  });
+
+  it('accepting each time walks down one rung at a time and stops at the first rung', () => {
+    const t = new Timeline();
+    t.decide({ kind: 'track_change', lift: 'bench', to: 'rehab', startWeight: 20 });
+    logRehab(t, 20, 10, 6);
+    answer(t, ex, 'accept');
+    expect(rx(t)).toEqual({ weight: 17.5, reps: 10 });
+    logRehab(t, 17.5, 10, 6);
+    answer(t, ex, 'accept');
+    expect(rx(t)).toEqual({ weight: 15, reps: 10 });
+    logRehab(t, 15, 10, 6);
+    answer(t, ex, 'accept');
+    expect(rx(t)).toEqual({ weight: 15, reps: 10 });
+  });
+});
+
+describe('5b. two reds on a barbell lift: pause', () => {
+  const redBench = (t: Timeline, w: number, rating: number) => t.log([withPain(linearLift('bench', w, ok()), rating)]);
+  function twoReds() {
+    const t = new Timeline();
+    t.settings.startingWeights.bench = 100;
+    redBench(t, 100, 6);
+    redBench(t, 100, 7);
     return t;
   }
 
   it('asks to pause with the exact copy and button labels', () => {
-    const t = twoReds();
-    const a = alertFor(t, ex)!;
+    const a = alertFor(twoReds(), 'bench')!;
     expect(a.kind).toBe('two_reds');
     expect(a.message).toBe('Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing.');
     expect([a.acceptLabel, a.keepLabel]).toEqual(['Pause this lift', 'Keep going']);
@@ -228,10 +248,10 @@ describe('5. two reds in a row: pause', () => {
 
   it('Pause: the lift is skipped automatically until resumed in Settings', () => {
     const t = twoReds();
-    answer(t, ex, 'accept');
+    answer(t, 'bench', 'accept');
     expect(t.state().paused.bench).toBe(true);
-    t.log([linearLift('squat', 70, ok())]); // so the next workout is the one with Bench
-    // linear layout: still listed, marked Paused, and drafted as skipped
+    t.log([linearLift('squat', 70, ok())]);
+    t.log([linearLift('squat', 75, ok())]); // two more sessions, so the next workout is the one with Bench
     const plan = planNextSession(t.state(), t.settings, TODAY);
     const lift = plan.lifts.find((l) => l.slot === 'bench')!;
     expect(lift.paused).toBe(true);
@@ -245,18 +265,17 @@ describe('5. two reds in a row: pause', () => {
       t.log([waveLift(p.lifts[0].slot as 'squat', 1, 100, 5)], '531');
     }
     expect(order).toEqual(['squat', 'deadlift', 'ohp', 'squat']);
-    // resume
     t.decide({ kind: 'resume_lift', lift: 'bench' });
     expect(t.state().paused.bench).toBe(false);
   });
 
   it('Keep going leaves it running, and another red asks again', () => {
     const t = twoReds();
-    answer(t, ex, 'keep');
+    answer(t, 'bench', 'keep');
     expect(t.state().paused.bench).toBe(false);
-    expect(alertFor(t, ex)).toBeNull();
-    logRehab(t, 15, 10, 8);
-    expect(alertFor(t, ex)?.kind).toBe('two_reds');
+    expect(alertFor(t, 'bench')).toBeNull();
+    redBench(t, 100, 8);
+    expect(alertFor(t, 'bench')?.kind).toBe('two_reds');
   });
 });
 
@@ -697,17 +716,6 @@ describe('15. accessories live inside the last card', () => {
     expect(isWorkoutComplete(d)).toBe(true);
   });
 
-  it('move to the previous card when the last lift is skipped, and back when it is not', () => {
-    const t = workoutA();
-    let d = draftA(t);
-    d = setSkipped(d, 2, true);
-    expect(d.lifts[2].sets.some((x) => x.type === 'accessory')).toBe(false);
-    expect(d.lifts[1].sets.filter((x) => x.type === 'accessory')).toHaveLength(6);
-    d = setSkipped(d, 2, false);
-    expect(d.lifts[2].sets.filter((x) => x.type === 'accessory')).toHaveLength(6);
-    expect(d.lifts[1].sets.some((x) => x.type === 'accessory')).toBe(false);
-  });
-
   it('untouched accessories are part of the Finish prompt', () => {
     const t = workoutA();
     let d = draftA(t);
@@ -717,11 +725,11 @@ describe('15. accessories live inside the last card', () => {
       }),
     );
     expect(liftsWithUntouched(d)).toEqual([2]); // only because of the accessories
-    const missed = resolveUntouched(d, 'missed');
+    const missed = resolveUntouched(d);
     const accs = missed.lifts[2].sets.filter((x) => x.type === 'accessory');
+    expect(accs).toHaveLength(6);
     expect(accs.every((x) => x.done && x.reps === 0)).toBe(true);
-    const left = resolveUntouched(d, 'skip');
-    expect(left.lifts[2].sets.filter((x) => x.type === 'accessory').every((x) => !x.done)).toBe(true);
+    expect(liftsWithUntouched(missed)).toEqual([]);
   });
 });
 

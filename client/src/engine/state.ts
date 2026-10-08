@@ -116,7 +116,7 @@ function freshWave(): WaveLiftState {
 }
 
 function freshRehab(weight: number, reps: number): RehabState {
-  return { weight, reps, next: 'hold', reds: 0, sessions: 0, returnAskAt: 0, lastTrained: null, breakHandled: false, pending: null };
+  return { weight, reps, next: 'hold', sessions: 0, returnAskAt: 0, lastTrained: null, breakHandled: false, pending: null };
 }
 
 function freshAccessory(weight: number, reps: number): AccessoryState {
@@ -395,30 +395,18 @@ function applyRehabLift(rs: RehabState, l: LoggedLift, ex: RehabExercise, date: 
   const here = `${perHand(W)} for ${setsByReps(nSets, lastReps)}`;
 
   if (zone === 'red') {
-    rs.reds += 1;
+    // Every red offers the same drop-back: one rung down at the first rep step.
     rs.next = 'hold';
-    if (rs.reds >= 2) {
-      rs.pending = {
-        kind: 'two_reds',
-        lift: slot,
-        severity: 'action',
-        message: 'Your shoulder flagged red twice in a row. Pause this lift and get it assessed before continuing.',
-        acceptLabel: 'Pause this lift',
-        keepLabel: 'Keep going',
-      };
-    } else {
-      const back = dropBack(ladder, W, steps);
-      rs.pending = {
-        kind: 'rehab_red',
-        lift: slot,
-        severity: 'action',
-        value: back.weight,
-        message: `${describePain(l.pain!)}. Drop back to ${perHand(back.weight)} for ${setsByReps(nSets, back.reps)}?`,
-      };
-    }
+    const back = dropBack(ladder, W, steps);
+    rs.pending = {
+      kind: 'rehab_red',
+      lift: slot,
+      severity: 'action',
+      value: back.weight,
+      message: `${describePain(l.pain!)}. Drop back to ${perHand(back.weight)} for ${setsByReps(nSets, back.reps)}?`,
+    };
     return;
   }
-  rs.reds = 0;
 
   const holdNote = zone === 'amber' ? describePain(l.pain!).toLowerCase() : zone === 'none' ? 'no shoulder rating' : 'missed reps';
   if (zone === 'amber' || zone === 'none' || !completed) {
@@ -630,20 +618,15 @@ function applyAlertResponse(state: ProgramState, body: AlertResponse, settings: 
   if (body.alertKind === 'break') return applyBreak(state, body);
   const slot = body.lift;
   const main = isMain(slot);
-  const onRehab = main && state.track[slot] === 'rehab';
 
-  // Rehab exercise alerts (and the two-reds question when the lift is on rehab).
-  if (REHAB_ALERTS.includes(body.alertKind) || (body.alertKind === 'two_reds' && onRehab)) {
+  // Rehab exercise alerts.
+  if (REHAB_ALERTS.includes(body.alertKind)) {
     if (!main || (slot !== 'bench' && slot !== 'ohp')) return;
     const ex = REHAB_OF[slot];
     const rs = state.rehab[ex];
     const pending = rs.pending;
     if (!pending || pending.kind !== body.alertKind) return;
     rs.pending = null;
-    if (body.alertKind === 'two_reds') {
-      if (body.choice === 'accept') state.paused[slot] = true;
-      return;
-    }
     if (body.alertKind === 'rehab_red') {
       if (body.choice === 'accept') {
         rs.weight = body.value ?? dropBack(settings.rehab.ladders[ex], rs.weight, settings.rehab.repSteps).weight;

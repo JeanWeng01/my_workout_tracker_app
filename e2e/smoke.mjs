@@ -61,7 +61,7 @@ check('fresh draft: first set not pressed', (await page.getByRole('button', { na
 for (const c of await page.getByRole('button', { name: /Complete set/ }).all()) await c.click();
 await page.getByRole('button', { name: 'Finish workout' }).click();
 await shot('06-finish-prompt');
-await page.getByRole('button', { name: 'Skip those lifts' }).click();
+await page.getByRole('button', { name: 'Count as missed reps' }).click();
 await page.getByRole('heading', { name: 'Workout B' }).waitFor();
 check('after finishing, next is Workout B', true);
 await shot('07-home-after-finish');

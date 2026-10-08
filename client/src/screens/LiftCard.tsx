@@ -19,7 +19,6 @@ import {
   roundingIncrement,
   setPain,
   setSetValues,
-  setSkipped,
   setWorkingWeight,
   stepReps,
   toggleSet,
@@ -111,7 +110,6 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
   const bar = barbell ? settings.barWeights[lift] : 0;
   const plates = barbell ? platesPerSide(working, bar, effectivePlates(settings)) : [];
   const step = roundingIncrement(settings);
-  const phaseLinear = session.phase === 'linear';
   const barbellLinear = barbell && isLinearScheme(log.scheme);
   const perSetWeights = new Set(work.map(({ s }) => s.weight)).size > 1;
   const allDone = work.length > 0 && work.every(({ s }) => s.done);
@@ -174,9 +172,7 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
 
           {log.paused ? (
             <div className="small">Paused after two red shoulder ratings. Resume it in Settings → Lift tracks when you&apos;re ready.</div>
-          ) : log.skipped ? (
-            <button className="btn-link" onClick={() => act((s) => setSkipped(s, li, false))}>Undo skip</button>
-          ) : (
+          ) : log.skipped ? null : (
             <>
               {warm.length > 0 ? (
                 <div className="warmups">
@@ -281,7 +277,6 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
 
               <div>
                 {barbell && <button className="btn-link" onClick={() => act((s) => addExtraSet(s, li))}>+ Extra set</button>}
-                {phaseLinear && <button className="btn-link" onClick={() => act((s) => setSkipped(s, li, true))}>Skip lift</button>}
               </div>
             </>
           )}

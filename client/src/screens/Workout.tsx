@@ -56,8 +56,8 @@ export function Workout({ session, program, onExit }: { session: Session; progra
 
   useWakeLock(!past);
 
-  const finish = async (mode: 'missed' | 'skip') => {
-    const r = await finishWorkout(session.id, mode);
+  const finish = async () => {
+    const r = await finishWorkout(session.id);
     onExit(r.graduated);
   };
   const leaveUnfinished = async () => {
@@ -84,12 +84,12 @@ export function Workout({ session, program, onExit }: { session: Session; progra
     }
     if (ratingQueue) return; // the prompt is still open
     setCelebrate(true);
-    const id = setTimeout(() => void finish('missed'), 2000);
+    const id = setTimeout(() => void finish(), 2000);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complete, held, needing.length, ratingQueue]);
 
-  const proceedFinish = () => (needsUntouchedChoice(session) ? setAsking('finish') : void finish('missed'));
+  const proceedFinish = () => (needsUntouchedChoice(session) ? setAsking('finish') : void finish());
   const onFinishTap = () => {
     if (needing.length > 0) {
       setFinishRequested(true);
@@ -185,20 +185,12 @@ export function Workout({ session, program, onExit }: { session: Session; progra
             <div>
               <div style={{ fontWeight: 700, marginBottom: 8 }}>
                 {onlyAccessoriesLeft
-                  ? 'Some shoulder work is untouched. Count it as missed, or finish without it?'
-                  : linear
-                    ? 'Count untouched sets as missed reps, or skip those lifts?'
-                    : 'Some main sets are untouched. Count them as missed reps, or leave this workout unfinished and redo it from the start?'}
+                  ? 'Some shoulder work is untouched. Count it as missed, or leave this workout unfinished and redo it from the start?'
+                  : 'Some sets are untouched. Count them as missed reps, or leave this workout unfinished and redo it from the start?'}
               </div>
-              <button className="btn" onClick={() => void finish('missed')}>{onlyAccessoriesLeft ? 'Count as missed' : 'Count as missed reps'}</button>
+              <button className="btn" onClick={() => void finish()}>{onlyAccessoriesLeft ? 'Count as missed' : 'Count as missed reps'}</button>
               <div style={{ height: 8 }} />
-              {onlyAccessoriesLeft ? (
-                <button className="btn" onClick={() => void finish('skip')}>Finish without it</button>
-              ) : linear ? (
-                <button className="btn" onClick={() => void finish('skip')}>Skip those lifts</button>
-              ) : (
-                <button className="btn" onClick={() => setAsking('leave')}>Leave unfinished</button>
-              )}
+              <button className="btn" onClick={() => setAsking('leave')}>Leave unfinished</button>
               <button className="btn-link" onClick={() => setAsking(null)}>Back</button>
             </div>
           )}

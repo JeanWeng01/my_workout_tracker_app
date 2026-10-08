@@ -37,7 +37,7 @@ async function logSquatWorkout(page) {
   await page.getByRole('button', { name: /Squat/ }).click();
   for (const c of await page.getByRole('button', { name: /Complete set/ }).all()) await c.click();
   await page.getByRole('button', { name: 'Finish workout' }).click();
-  await page.getByRole('button', { name: 'Skip those lifts' }).click();
+  await page.getByRole('button', { name: 'Count as missed reps' }).click();
   await page.getByRole('heading', { name: /Workout/ }).waitFor();
 }
 

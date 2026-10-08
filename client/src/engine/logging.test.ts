@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultSettings } from './defaults';
 import {
   addExtraSet, draftFromPlan, finishSession, liftsWithUntouched, resolveUntouched, setSetValues,
-  setSkipped, setWorkingWeight, stepReps, toggleSet,
+  setWorkingWeight, stepReps, toggleSet,
 } from './logging';
 import { planNextSession } from './plan';
 import { deriveState } from './state';
@@ -12,6 +12,8 @@ settings.startingWeights.squat = 200;
 settings.shoulder.tracking = false; // these tests cover the barbell basics; shoulder extras have their own tests
 const plan = planNextSession(deriveState(settings, [], []), settings, '2026-01-02');
 const fresh = () => draftFromPlan(plan, settings, 'd1', '2026-01-02T10:00:00Z', '2026-01-02');
+/** A lift the app itself skips (paused). The lifter has no way to skip one. */
+const skipLift = (d: ReturnType<typeof fresh>, i: number) => ({ ...d, lifts: d.lifts.map((l, j) => (j === i ? { ...l, skipped: true, paused: true } : l)) });
 const firstWork = (s: ReturnType<typeof fresh>, li = 0) => s.lifts[li].sets.findIndex((x) => x.type === 'work');
 
 describe('draft operations', () => {
@@ -75,25 +77,21 @@ describe('draft operations', () => {
     expect(liftsWithUntouched(d).includes(0)).toBe(false);
   });
 
-  it('finish: untouched sets counted as missed, or untouched lifts skipped', () => {
+  it('finish: every untouched set counts as missed; nothing is ever skipped', () => {
     let d = fresh();
     d = toggleSet(d, 0, firstWork(d)); // squat: one set done, four untouched
     expect(liftsWithUntouched(d)).toEqual([0, 1, 2]);
-
-    const missed = resolveUntouched(d, 'missed');
+    const missed = resolveUntouched(d);
     expect(missed.lifts.every((l) => !l.skipped)).toBe(true);
     expect(missed.lifts[0].sets.filter((x) => x.type === 'work').map((x) => x.reps)).toEqual([5, 0, 0, 0, 0]);
-
-    const skip = resolveUntouched(d, 'skip');
-    expect(skip.lifts[0].skipped).toBe(false); // partly done: rest counts as missed
-    expect(skip.lifts[0].sets.filter((x) => x.type === 'work').map((x) => x.reps)).toEqual([5, 0, 0, 0, 0]);
-    expect(skip.lifts[1].skipped && skip.lifts[2].skipped).toBe(true);
-    expect(liftsWithUntouched(skip)).toEqual([]);
+    expect(missed.lifts[1].sets.filter((x) => x.type === 'work').every((x) => x.done && x.reps === 0)).toBe(true);
+    expect(liftsWithUntouched(missed)).toEqual([]);
   });
 
-  it('skipped lifts are excluded; finishing stamps the time', () => {
-    let d = setSkipped(fresh(), 1, true);
+  it('a lift the app paused is left out; finishing stamps the time', () => {
+    let d = skipLift(fresh(), 1);
     expect(liftsWithUntouched(d)).toEqual([0, 2]);
+    expect(resolveUntouched(d).lifts[1].sets.every((x) => !x.done)).toBe(true);
     d = finishSession(d, '2026-01-02T11:00:00Z');
     expect(d.finishedAt).toBe('2026-01-02T11:00:00Z');
   });
@@ -101,10 +99,11 @@ describe('draft operations', () => {
   it('a logged draft feeds back into the engine (round trip)', () => {
     let d = fresh();
     for (let j = 0; j < d.lifts[0].sets.length; j++) if (d.lifts[0].sets[j].type === 'work') d = toggleSet(d, 0, j);
-    d = finishSession(resolveUntouched(d, 'skip'), '2026-01-02T11:00:00Z');
+    d = finishSession(resolveUntouched(d), '2026-01-02T11:00:00Z');
     const st = deriveState(settings, [d], []);
     expect(st.linear.squat.weight).toBe(205);
-    expect(st.linear.bench.weight).toBe(45); // skipped
+    expect(st.linear.bench.weight).toBe(45); // untouched = missed: retry the same weight
+    expect(st.linear.bench.streak).toBe(1);
     expect(planNextSession(st, settings, '2026-01-03').label).toBe('Workout B');
   });
 });
@@ -131,7 +130,7 @@ describe('unfinished workouts', () => {
     const gone = abandonSession(toggleSet(fresh(), 0, firstWork(fresh())), noon('2026-01-02'));
     let redo = { ...fresh(), id: 'd2', date: '2026-01-05' };
     for (let j = 0; j < redo.lifts[0].sets.length; j++) if (redo.lifts[0].sets[j].type === 'work') redo = toggleSet(redo, 0, j);
-    redo = finishSession(resolveUntouched(redo, 'skip'), noon('2026-01-05'));
+    redo = finishSession(resolveUntouched(redo), noon('2026-01-05'));
     expect(deriveState(settings, [gone, redo], []).linear.squat.weight).toBe(205);
   });
 
@@ -182,16 +181,15 @@ describe('automatic finish', () => {
     expect(isWorkoutComplete(d)).toBe(false);
   });
 
-  it('skipped lifts are left out; a workout with everything skipped is never complete', () => {
+  it('paused lifts are left out; a workout with everything paused is never complete', () => {
     let d = fresh();
-    d = setSkipped(d, 1, true);
-    d = setSkipped(d, 2, true);
+    d = skipLift(skipLift(d, 1), 2);
     expect(isWorkoutComplete(d)).toBe(false);
     d.lifts[0].sets.forEach((x, si) => {
       if (x.type === 'work') d = toggleSet(d, 0, si);
     });
     expect(isWorkoutComplete(d)).toBe(true);
-    const all = setSkipped(setSkipped(setSkipped(fresh(), 0, true), 1, true), 2, true);
+    const all = skipLift(skipLift(skipLift(fresh(), 0), 1), 2);
     expect(isWorkoutComplete(all)).toBe(false);
   });
 
