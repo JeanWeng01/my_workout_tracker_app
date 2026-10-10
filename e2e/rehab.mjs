@@ -82,7 +82,7 @@ await page.getByText('Workout complete! 🎉').waitFor({ timeout: 3000 });
 check('then the popup shows, and it exits to Home by itself', true);
 await page.getByRole('heading', { name: 'Workout B' }).waitFor({ timeout: 6000 });
 home = await text();
-check('next is Workout B with Seated DB OHP 2 × 12.5 lb', home.includes('Seated DB OHP') && home.includes('2 × 12.5 lb'));
+check('next is Workout B with the barbell Overhead Press (not a dumbbell press)', /Overhead Press 5×5/.test(home) && !home.includes('Seated DB OHP'));
 
 // ---- progression through the UI
 const runWorkout = async (ratings /* name -> number */) => {
@@ -113,26 +113,20 @@ const runWorkout = async (ratings /* name -> number */) => {
   }
   await page.getByRole('button', { name: 'Workout calendar' }).waitFor({ timeout: 8000 });
 };
-await runWorkout({ 'Seated DB OHP': 1 }); // B1, clean
+await runWorkout({ 'Overhead Press': 1 }); // B1, clean
 home = await text();
 check('A1 + B1 clean: Workout A is next with DB Floor Press 3 × 12', /Workout A/.test(home) && /DB Floor Press 3 × 12/.test(home));
-await runWorkout({ 'DB Floor Press': 1 }); // A2, clean at 12
+await runWorkout({ 'DB Floor Press': 3 }); // A2: amber at 3 x 12 -> hold
 home = await text();
-check('Workout B shows Seated DB OHP 3 × 12', /Seated DB OHP 3 × 12/.test(home));
-await runWorkout({ 'Seated DB OHP': 3 }); // B2, amber
+check('Workout B is next, with the barbell Overhead Press at 50 after the clean session', /Workout B/.test(home) && /Overhead Press 5×5/.test(home) && home.includes('50'));
+await runWorkout({ 'Overhead Press': 1 }); // B2
 home = await text();
-check('after the amber session Workout A shows DB Floor Press 3 × 15', /DB Floor Press 3 × 15/.test(home));
+check('the amber session held the press: Workout A still shows DB Floor Press 3 × 12', /Workout A/.test(home) && /DB Floor Press 3 × 12/.test(home));
 await page.getByRole('button', { name: 'Start workout' }).click();
 await page.getByRole('button', { name: /^DB Floor Press/ }).click();
 const pressCard = page.locator('.card', { hasText: 'DB Floor Press' });
-check("the card shows the day's prescription: 3 chips at 15", (await pressCard.locator('.chip').count()) === 3 && (await pressCard.locator('.chip').first().innerText()) === '15');
-await page.getByRole('button', { name: '← Home (workout stays open)' }).click();
-await runWorkout({ 'DB Floor Press': 1 }); // A3, clean at 15 -> 17.5
-home = await text();
-check('amber held the OHP: Workout B still shows Seated DB OHP 3 × 12', /Seated DB OHP 3 × 12/.test(home));
-await page.getByRole('button', { name: 'Start workout' }).click();
-await page.getByRole('button', { name: /^Seated DB OHP/ }).click();
-check('...with the hold explained in the card', (await page.locator('.card', { hasText: 'Seated DB OHP' }).innerText()).includes('Holding at 2 × 12.5 lb for 3 × 12 (shoulder rated 3).'));
+check("the card shows the day's prescription: 3 chips at 12", (await pressCard.locator('.chip').count()) === 3 && (await pressCard.locator('.chip').first().innerText()) === '12');
+check('...and explains the hold', (await pressCard.innerText()).includes('Holding at 2 × 15 lb for 3 × 12 (shoulder rated 3).'));
 await shot('46-hold-banner');
 await page.getByRole('button', { name: '← Home (workout stays open)' }).click();
 
@@ -156,8 +150,8 @@ check('Lift tracks show Bench on shoulder rehab', (await text()).includes('Bench
 await page.getByRole('button', { name: 'On', exact: true }).first().click();
 await page.getByRole('button', { name: '← Home' }).click();
 await page.getByRole('button', { name: /Start workout|Resume workout/ }).click();
-await page.getByRole('button', { name: /^Seated DB OHP/ }).click();
-const off = await page.locator('.card', { hasText: 'Seated DB OHP' }).innerText();
+await page.getByRole('button', { name: /^DB Floor Press/ }).click();
+const off = await page.locator('.card', { hasText: 'DB Floor Press' }).innerText();
 check('shoulder tracking off: no Shoulder row on the card', !off.includes('Shoulder'));
 
 console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');

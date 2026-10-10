@@ -14,7 +14,7 @@ import {
   liftsWithUntouched,
   planNextSession,
   resolveUntouched,
-  schema2Migration,
+  pendingMigrations,
   SCHEMA_VERSION,
   slotOf,
   type Alert,
@@ -58,14 +58,14 @@ export async function ensureSettings(): Promise<Settings> {
 }
 
 /**
- * One-time data migration for the shoulder update: puts Bench and OHP on the rehab track. Idempotent, and safe on two
+ * One-time data migrations: Bench goes to the rehab track, and Overhead Press goes back to the barbell if an earlier version moved it. Idempotent, and safe on two
  * devices (the decisions have fixed ids). Never touches a logged session.
  */
 export async function runMigrations(): Promise<void> {
   const created = await db.transaction('rw', db.settings, db.sessions, db.decisions, async () => {
     const settings = await ensureSettings();
     const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
-    const made = schema2Migration(settings, sessions, decisions);
+    const made = pendingMigrations(settings, sessions, decisions);
     if (made.length) await db.decisions.bulkPut(made.map((d) => ({ ...d, dirty: 1 as const })));
     return made.length;
   });

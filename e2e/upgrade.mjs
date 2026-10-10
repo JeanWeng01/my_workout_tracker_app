@@ -112,14 +112,14 @@ await page.reload();
 await page.getByText('Ego lifts').waitFor();
 await page.getByRole('heading', { name: 'Workout B' }).waitFor({ timeout: 8000 });
 let home = await text();
-check('after the update the next workout is B (Day 1 was A) with Seated DB OHP 2 × 12.5 lb', /Seated DB OHP 3 × 10/.test(home) && home.includes('2 × 12.5 lb'));
+check('after the update the next workout is B (Day 1 was A) with the barbell Overhead Press 45', /Overhead Press 5×5/.test(home) && !home.includes('Seated DB OHP'));
 check('squat continues from Day 1: 70', home.includes('70'));
-check('no barbell Bench or OHP is planned', !home.includes('Bench Press') && !home.includes('Overhead Press'));
+check('no barbell Bench is planned (Bench is on rehab)', !home.includes('Bench Press'));
 
 let db = await readDb();
 check('Day 1 is untouched, byte for byte', JSON.stringify(db.sessions.find((s) => s.id === DAY1.id)) === JSON.stringify(DAY1));
 const tracks = db.decisions.filter((d) => d.body.kind === 'track_change');
-check('exactly two track decisions were created: Bench -> rehab @ 15, OHP -> rehab @ 12.5', tracks.length === 2 && tracks.some((d) => d.body.lift === 'bench' && d.body.startWeight === 15) && tracks.some((d) => d.body.lift === 'ohp' && d.body.startWeight === 12.5));
+check('exactly one track decision was created: Bench -> rehab @ 15 (OHP stays on the barbell)', tracks.length === 1 && tracks[0].body.lift === 'bench' && tracks[0].body.to === 'rehab' && tracks[0].body.startWeight === 15);
 check('...effective after Day 1', tracks.every((d) => d.afterSessionId === DAY1.id));
 const settings = db.settings[0];
 check('settings were upgraded to schema 2 with the new groups', settings.schemaVersion === 2 && settings.shoulder?.tracking === true && settings.rehab?.ladders?.db_floor_press?.[0] === 15);
@@ -131,7 +131,7 @@ await page.getByRole('heading', { name: 'Workout B' }).waitFor();
 await page.reload();
 await page.getByRole('heading', { name: 'Workout B' }).waitFor();
 db = await readDb();
-check('reloading twice does not duplicate the migration', db.decisions.filter((d) => d.body.kind === 'track_change').length === 2);
+check('reloading twice does not duplicate the migration', db.decisions.filter((d) => d.body.kind === 'track_change').length === 1);
 
 // Calendar and CSV still show Day 1
 await page.getByRole('button', { name: 'Workout calendar' }).click();
@@ -145,6 +145,81 @@ const benchRows = rows.filter((r) => r[4] === 'bench');
 check('CSV: Day 1 barbell bench rows are still there, unchanged (5 sets, 45 lb, linear 5x5)', benchRows.length === 5 && benchRows.every((r) => r[3] === 'linear' && r[5] === '5x5' && r[10] === '45' && r[11] === '5'));
 check('CSV has the new pain columns', rows[0].slice(-2).join() === 'pain_0_10,pain_sharp');
 check('CSV: the Day 1 note is on the first row only', rows[1][18] === 'Felt my shoulder on the bench.' && rows.slice(2).every((r) => r[18] === ''));
+
+// ---- Scenario 2: a phone that already ran the first version of the shoulder update
+function deterministicId(seed) {
+  const hash = (salt) => {
+    let h = 2166136261 ^ salt;
+    for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+    return (h >>> 0).toString(16).padStart(8, '0');
+  };
+  const hex = hash(1) + hash(2) + hash(3) + hash(4);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+const firstVersionDecisions = ['bench', 'ohp'].map((lift) => ({
+  id: deterministicId(`schema2:track_change:${lift}:rehab`),
+  updatedAt: '2026-10-08T09:00:00.000Z',
+  deleted: false,
+  schemaVersion: 2,
+  createdAt: '2026-10-08T09:00:00.000Z',
+  afterSessionId: DAY1.id,
+  body: { kind: 'track_change', lift, to: 'rehab', startWeight: lift === 'bench' ? 15 : 12.5 },
+  dirty: 0,
+}));
+await page.evaluate(
+  async ({ day1, decisions }) => {
+    await new Promise((res, rej) => {
+      const open = indexedDB.open('bulletproof');
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction(['sessions', 'settings', 'decisions'], 'readwrite');
+        tx.objectStore('sessions').clear();
+        tx.objectStore('decisions').clear();
+        tx.objectStore('settings').clear();
+        tx.objectStore('sessions').put(day1);
+        for (const d of decisions) tx.objectStore('decisions').put(d);
+        // settings as the first version left them: schema 2, the 1:30 default saved
+        tx.objectStore('settings').put({
+          id: 'settings', updatedAt: '2026-10-08T09:00:00.000Z', deleted: false, schemaVersion: 2, unit: 'lb',
+          barWeights: { squat: 45, bench: 45, row: 45, ohp: 45, deadlift: 45 }, platesOwned: [45, 35, 25, 10, 5, 2.5], microplates: false,
+          retriesBeforeDeload: 3, deloadPercent: 0.1, linearLayout: 'stronglifts', tmPercent: 0.85, liftsPerSession: 1, template: 'fsl', bbbPercent: 0.5,
+          deloadStyle: 'forever', startingWeights: { squat: 65, bench: 45, row: 45, ohp: 45, deadlift: 95 },
+          restSeconds: { warmup: 60, work: 90, supplemental: 90 },
+          shoulder: { tracking: true, tracked: ['db_floor_press', 'seated_db_ohp', 'bench', 'ohp', 'row'], greenMax: 2, amberMax: 4 },
+          rehab: { sets: 3, repSteps: [10, 12, 15], ladders: { db_floor_press: [15, 17.5, 20, 25, 30], seated_db_ohp: [12.5, 15, 17.5, 20] }, returnWeights: { bench: 55, ohp: 45 } },
+          accessories: { rehabSets: 3, maintenanceSets: 2, repSteps: [10, 12, 15], ladders: { side_lying_er: [3, 5, 8, 10, 12], db_scaption: [3, 5, 8, 10, 12, 15] } },
+          dirty: 0,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          res();
+        };
+        tx.onerror = () => rej(tx.error);
+      };
+      open.onerror = () => rej(open.error);
+    });
+  },
+  { day1: DAY1, decisions: firstVersionDecisions },
+);
+await page.reload();
+await page.getByText('Ego lifts').waitFor();
+await page.getByRole('heading', { name: 'Workout B' }).waitFor({ timeout: 8000 });
+home = await text();
+check('already-migrated phone: Workout B now has the barbell Overhead Press, not the dumbbell one', /Overhead Press 5×5/.test(home) && !home.includes('Seated DB OHP'));
+db = await readDb();
+const back = db.decisions.filter((d) => d.body.kind === 'track_change' && d.body.lift === 'ohp' && d.body.to === 'linear');
+check('exactly one "OHP back to the barbell" decision was added, at 45 lb, after Day 1', back.length === 1 && back[0].body.startWeight === 45 && back[0].afterSessionId === DAY1.id);
+check('the first version\'s two decisions are untouched', db.decisions.filter((d) => d.body.to === 'rehab').length === 2);
+check('Bench is still on rehab', db.decisions.some((d) => d.body.lift === 'bench' && d.body.to === 'rehab'));
+check('Day 1 is still untouched', JSON.stringify(db.sessions.find((s) => s.id === DAY1.id)) === JSON.stringify(DAY1));
+await page.reload();
+await page.getByRole('heading', { name: 'Workout B' }).waitFor();
+db = await readDb();
+check('another launch does not add it again', db.decisions.filter((d) => d.body.kind === 'track_change').length === 3);
+await page.getByRole('button', { name: 'Start workout' }).click();
+await page.getByRole('button', { name: /^Squat/ }).click();
+await page.getByRole('button', { name: /^Complete set/ }).first().click();
+check('the saved 1:30 rest default now rests 3:00', /3:00|2:59/.test(await page.getByRole('timer').innerText()));
 
 console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
 await browser.close();

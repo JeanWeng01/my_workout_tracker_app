@@ -20,7 +20,7 @@
    - **Phase 2, Wendler 5/3/1:** training-max based waves with the 7th Week Protocol.
 4. Detects plateaus and **suggests** (never forces) "retry", "dial down", "switch to 3×5", "reset training max", and "you're ready for 5/3/1".
 5. Syncs all data to my Railway Postgres as a backup, and exports full history as CSV.
-6. **Shoulder rehab (section 4.8):** while my shoulder recovers, Bench and OHP are neutral-grip dumbbell exercises on a pain-gated progression; every tracked lift gets a 0–10 shoulder rating that gates progression; band pull-aparts and two shoulder accessories ride inside existing cards.
+6. **Shoulder rehab (section 4.8):** while my shoulder recovers, Bench is a neutral-grip dumbbell exercise on a pain-gated progression (Overhead Press went back to the barbell once the shoulder tolerated it, and can be moved to rehab again in Settings); every tracked lift gets a 0–10 shoulder rating that gates progression; band pull-aparts and two shoulder accessories ride inside existing cards.
 
 ---
 
@@ -143,7 +143,7 @@ Records are stored as JSONB documents exactly as the client holds them (plus a `
 | 5/3/1 template | FSL | Minimalist / FSL / BBB |
 | BBB percentage | 50% of TM | |
 | 7th week deload style | Forever deload | Alternative: Light deload (see 4.4) |
-| Rest times | 60 / 90 / 90 s | After warm-up, work and extra-work sets (6.2) |
+| Rest times | 60 / 180 / 90 s | After warm-up, work and extra-work sets (6.2): work sets rest **3 minutes** |
 | Shoulder tracking | On | Off = ratings never asked for or used (4.8) |
 | Tracked lifts | DB Floor Press, Seated DB OHP, Bench, OHP, Row | Squat and Deadlift can be added |
 | Pain zones | green 0–2, amber 3–4, red 5+ or sharp | Editable |
@@ -152,7 +152,7 @@ Records are stored as JSONB documents exactly as the client holds them (plus a `
 | Return-to-barbell weights | Bench 55, OHP 45 | |
 | Accessory sets | 3 while on rehab, 2 for maintenance | |
 | Accessory rep steps / ladders | 10 → 12 → 15; ER 3 → 5 → 8 → 10 → 12, scaption 3 → 5 → 8 → 10 → 12 → 15 | |
-| Lift tracks | Squat, Deadlift, Row linear; Bench, OHP rehab | Per-lift override, either direction; resume paused lifts here |
+| Lift tracks | Squat, Deadlift, Row, **OHP** linear (barbell); **Bench** rehab | Per-lift override, either direction (OHP can go back to rehab); resume paused lifts here |
 
 **Microplate rule:** while "I own 1.25 lb microplates" is off, **nothing about 1.25 plates or 2.5 lb jumps appears anywhere outside that one Settings toggle**. That means no plate breakdowns with 1.25, no "+2.5" suggestions or alerts, and no hints about buying them. The rounding increment is 5 lb. When the toggle is on, the rounding increment becomes 2.5 lb, 1.25 joins the plates list, and the microplate rules in 4.2 activate from the next session.
 
@@ -309,7 +309,7 @@ Settings also has **"Restart linear phase"**, for example after a pregnancy or l
 
 ### 4.8 Shoulder rehab, shoulder check and accessories (Change Request 01)
 
-*Why:* on Day 1, barbell bench (45 lb) aggravated an old shoulder problem (instability and vague pain at the front/side of the shoulder, sets 3–5). For roughly 12 weeks Bench and OHP are **neutral-grip dumbbell exercises** that step up slowly, gated by how the shoulder feels, then return to the barbell. Squat, Deadlift and Row stay on normal linear progression. The original request is kept in `CHANGE-REQUEST-01-shoulder-rehab.md`; **this section is the current truth**.
+*Why:* on Day 1, barbell bench (45 lb) aggravated an old shoulder problem (instability and vague pain at the front/side of the shoulder, sets 3–5). For roughly 12 weeks Bench is a **neutral-grip dumbbell exercise** that steps up slowly, gated by how the shoulder feels, then returns to the barbell. Squat, Deadlift and Row stay on normal linear progression. **Overhead Press** started on the same rehab track but went back to the barbell (linear 5×5 from the empty bar) once the shoulder tolerated it; the Seated DB OHP exercise, its ladder and every rule below still exist for it and can be switched on again per lift in Settings → Lift tracks. The original request is kept in `CHANGE-REQUEST-01-shoulder-rehab.md`; **this section is the current truth**.
 
 #### Tracks
 
@@ -382,7 +382,8 @@ The count-up timer proposed in the change request was **not adopted**: the exist
 
 - Sessions gain, inside their JSONB documents: `lifts[].pain {rating, sharp}`, `painSkipped`, `paused`, set types `prep` / `accessory` with an `exercise` field, scheme `rehab`, and `rules.shoulder`. New decision kinds: `track_change`, `pause_lift`, `resume_lift`, plus new alert kinds in `alert_response`. Settings gain `shoulder`, `rehab` and `accessories` groups. **No Postgres change**: the server stores the documents verbatim (verified by a sync round-trip test), so nothing runs on Railway for this change.
 - **Schema version 2.** Settings saved by version 1 are filled in with the new defaults field by field on load and written back once; nothing the user set is lost.
-- **First launch after the update** creates two `track_change` decisions, Bench → rehab (first rung, 15) and OHP → rehab (12.5), effective after the latest finished session, with **fixed ids** so two devices (or a device and the server) never produce duplicates. It is idempotent, and it **never touches a logged session**: Day 1's barbell bench (45 × 5×5) stays in history and on the calendar. A fresh install gets the same decisions, and restoring an older backup re-runs it.
+- **First launch after the update** creates one `track_change` decision, **Bench → rehab** (first rung, 15), effective after the latest finished session, with a **fixed id** so two devices (or a device and the server) never produce duplicates. It is idempotent, and it **never touches a logged session**: Day 1's barbell bench (45 × 5×5) stays in history and on the calendar. A fresh install gets the same decision, and restoring an older backup re-runs it.
+- **OHP back to the barbell.** A phone that already ran the first version of the update (which also put OHP on rehab) gets one more decision on its next launch: `track_change` OHP → `linear` at the return weight (45, the empty bar), effective after its latest finished session, with a fixed id. It runs once, only if OHP is still on rehab, and never overrides a later choice made in Settings. Any Seated DB OHP sessions already logged stay in history.
 
 #### CSV additions
 
@@ -466,7 +467,7 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
     - **AMRAP chip:** tap opens a big number picker defaulting to the minimum reps.
   - **Each set has a complete button** under its chip: a green-circle-with-a-check icon (48 px target). Grey when the set isn't done; tap → it turns green, the set is logged at target reps, and the rest timer starts. Tap again to undo. Once done, tapping the chip steps reps down (5 → 4 → … → 0 → back to target).
   - **Warm-up sets** (4.5) are listed under a collapsed "Warm-up (N sets)" row, each with suggested weight × reps and its own complete button. Completing one starts the rest timer too.
-  - **Rest timer:** a silent countdown bar pinned to the bottom of the screen, started by any complete tap. Wall-clock based (survives a locked screen). No buttons, no sound, no vibration: it only counts down, reads "Ready" at zero, and hides itself a few seconds later. Default rests: warm-up 60 s, work sets 90 s, supplemental 90 s (editable in Settings, phase 5).
+  - **Rest timer:** a silent countdown bar pinned to the bottom of the screen, started by any complete tap. Wall-clock based (survives a locked screen). No buttons, no sound, no vibration: it only counts down, reads "Ready" at zero, and hides itself a few seconds later. Default rests: warm-up 60 s, **work sets 3 minutes**, supplemental 90 s (editable in Settings). Saved settings that still hold the briefly used 1:30 default move back to 3:00; times the lifter set themselves are kept.
   - Supplemental sets (FSL/BBB) as a second, slightly smaller chip row.
 - **Shoulder additions (4.8).** A rehab card shows the weight per hand ("2 × 15 lb"), its set chips, the cue `Lower for 3 s` and the Shoulder row; nothing else. Tracked lifts show the **Shoulder** row (0–10 chips, Sharp / pinching toggle, zone name) below their chips. The first card's Warm-up row starts with the band pull-aparts. The last card shows the shoulder accessories only after its main work is done. A paused lift reads "Paused" and is skipped. **Before the workout completes itself (or when Finish workout is tapped), unrated tracked lifts are asked about one by one ("Rate your shoulder for …?", with Skip); only then does the popup run.** The screen stays awake while a workout is open.
 - **Unfinished workouts.** A "Can't finish today" link under Finish workout leaves the workout unfinished (confirm first). If anything was logged, that date becomes a **yellow** day on the calendar; partial sets are kept on the record but never count toward progression, the CSV or the total. If nothing was logged, it just disappears. The next time I start, the same workout is planned again and I **redo it from the start** (a fresh workout, not a resume). When that redo is finished, its date is **green**; the old yellow day stays yellow. **Nothing can be skipped: a workout is done in whole or not at all.** Closing the app without exiting resumes the workout, but **a workout not finished within 12 hours (12 hours without a tap) resets**: on the next open it becomes an unfinished (yellow) day, or simply disappears if nothing was logged, and the same workout is attempted in whole at the next workout. Home shows "Last workout was left unfinished. Starting it over from the top."
@@ -625,7 +626,7 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 
 **Shoulder rehab, pain check and accessories (Change Request 01).** Engine tests live in `shoulder.test.ts`, the browser checks in `e2e/rehab.mjs` and `e2e/upgrade.mjs`, and the sync round trip in `server/test/shoulder-sync.test.ts`:
 
-24. After the migration the next Workout B shows Squat, **Seated DB OHP 2 × 12.5 lb, 3 × 10**, Deadlift, and the following Workout A shows Squat, **DB Floor Press 2 × 15 lb, 3 × 10**, Row 50. Day 1 is untouched byte for byte; the migration is idempotent and its ids are fixed.
+24. After the migration the next Workout B shows Squat, **Overhead Press 45 (empty bar)**, Deadlift, and the following Workout A shows Squat, **DB Floor Press 2 × 15 lb, 3 × 10**, Row 50. Day 1 is untouched byte for byte; the migration is idempotent and its ids are fixed.
 25. Double progression: 3 × 10 → 3 × 12 → 3 × 15 at 15 lb, then 17.5 lb at 3 × 10, each step only after a completed + green session.
 26. Amber, missed reps, or no rating → hold the same weight and reps (never a stall). With tracking off a completed session steps up.
 27. Rehab red → drop-back alert (Accept moves one rung down at 3 × 10; first rung stays at 3 × 10; Keep repeats). Sharp/pinching is always red.
@@ -643,6 +644,8 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 39. Once both presses are back on the barbell, accessories drop to 2 sets at their current weight and rep step (one info alert); the top-of-ladder note is shown once.
 40. The shoulder rating is asked for, one lift at a time, before the "Workout complete" popup; Skip stops the asking.
 41. Upgrading a phone that holds old-format data (schema 1 settings, Day 1) keeps every logged value and the user's own settings.
+42. A phone already migrated by the first version of the update (both presses on rehab) gets exactly one "OHP back to the barbell" decision at 45 lb: Workout B shows the barbell Overhead Press, Bench stays on rehab, history and the first decisions are untouched, it never repeats, and a later Settings choice sticks.
+43. Work-set rest defaults to 3 minutes; a saved 1:30 default moves back to 3:00, a custom time is kept.
 
 
 ---

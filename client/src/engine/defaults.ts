@@ -1,4 +1,5 @@
 import { DEFAULT_PLATES } from './rounding';
+import { deriveState } from './state';
 import type { Decision, RuleSnapshot, Session, Settings } from './types';
 
 /** 1 = original app. 2 = shoulder rehab tracks, pain ratings and accessories (change request 01). */
@@ -34,7 +35,7 @@ export function defaultSettings(now = new Date().toISOString()): Settings {
     bbbPercent: 0.5,
     deloadStyle: 'forever',
     startingWeights: { squat: 65, bench: 45, row: 45, ohp: 45, deadlift: 95 },
-    restSeconds: { warmup: 60, work: 90, supplemental: 90 },
+    restSeconds: { warmup: 60, work: 180, supplemental: 90 },
     shoulder: {
       tracking: true,
       tracked: ['db_floor_press', 'seated_db_ohp', 'bench', 'ohp', 'row'],
@@ -62,8 +63,11 @@ export function defaultSettings(now = new Date().toISOString()): Settings {
   };
 }
 
-/** Rest times before the work-set default became 90 s. Saved copies still holding exactly these get the new default. */
-const OLD_REST_DEFAULT = { warmup: 60, work: 180, supplemental: 90 };
+/**
+ * The 1:30 default the app briefly shipped with. Saved copies still holding exactly these (never customised) go back to the
+ * 3:00 default; anything the lifter set themselves is left alone.
+ */
+const OLD_REST_DEFAULT = { warmup: 60, work: 90, supplemental: 90 };
 
 /**
  * Stored settings filled in with anything added since they were saved (including the shoulder/rehab/accessory
@@ -111,25 +115,62 @@ export function deterministicId(seed: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-/**
- * Decisions to create on the first launch after the shoulder update: Bench and OHP move to the rehab track at the
- * first rung of their dumbbell ladders, effective after the latest finished session. Nothing logged is touched.
- * Returns [] when track decisions already exist (already migrated, on this or another device).
- */
-export function schema2Migration(settings: Settings, sessions: Session[], decisions: Decision[], now = new Date().toISOString()): Decision[] {
-  if (decisions.some((d) => d.body.kind === 'track_change')) return [];
+/** The most recent finished session: decisions created by a migration take effect after it. */
+function latestFinishedId(sessions: Session[]): string | null {
   const latest = sessions
     .filter((s) => !s.deleted && s.finishedAt)
     .sort((a, b) => (a.finishedAt! < b.finishedAt! ? -1 : 1))
     .pop();
-  const make = (lift: 'bench' | 'ohp', exercise: 'db_floor_press' | 'seated_db_ohp'): Decision => ({
-    id: deterministicId(`schema2:track_change:${lift}:rehab`),
-    updatedAt: now,
-    deleted: false,
-    schemaVersion: SCHEMA_VERSION,
-    createdAt: now,
-    afterSessionId: latest?.id ?? null,
-    body: { kind: 'track_change', lift, to: 'rehab', startWeight: settings.rehab.ladders[exercise][0] },
-  });
-  return [make('bench', 'db_floor_press'), make('ohp', 'seated_db_ohp')];
+  return latest?.id ?? null;
+}
+
+/**
+ * Decisions to create on the first launch after the shoulder update: Bench moves to the rehab track at the first rung of its
+ * dumbbell ladder, effective after the latest finished session. (Overhead Press stays on the barbell.) Nothing logged is
+ * touched. Returns [] when track decisions already exist (already migrated, on this or another device).
+ */
+export function schema2Migration(settings: Settings, sessions: Session[], decisions: Decision[], now = new Date().toISOString()): Decision[] {
+  if (decisions.some((d) => d.body.kind === 'track_change')) return [];
+  return [
+    {
+      id: deterministicId('schema2:track_change:bench:rehab'),
+      updatedAt: now,
+      deleted: false,
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: now,
+      afterSessionId: latestFinishedId(sessions),
+      body: { kind: 'track_change', lift: 'bench', to: 'rehab', startWeight: settings.rehab.ladders.db_floor_press[0] },
+    },
+  ];
+}
+
+const OHP_BACK_ID = deterministicId('migration:track_change:ohp:linear:back-to-barbell');
+
+/**
+ * The shoulder tolerated the barbell overhead press, so Overhead Press goes back to the barbell. A phone that already
+ * moved it to rehab (the first version of the shoulder update did) gets one decision putting it back on the linear track at
+ * the return weight, effective after the latest finished session. It runs once (fixed id), only if OHP is still on rehab,
+ * and never overrides a choice made later in Settings. Moving it to rehab again is always possible in Settings → Lift tracks.
+ */
+export function ohpBackToBarbellMigration(settings: Settings, sessions: Session[], decisions: Decision[], now = new Date().toISOString()): Decision[] {
+  if (decisions.some((d) => d.id === OHP_BACK_ID)) return [];
+  if (deriveState(settings, sessions, decisions).track.ohp !== 'rehab') return [];
+  return [
+    {
+      id: OHP_BACK_ID,
+      updatedAt: now,
+      deleted: false,
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: now,
+      afterSessionId: latestFinishedId(sessions),
+      body: { kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: settings.rehab.returnWeights.ohp },
+    },
+  ];
+}
+
+/** Everything the app has to create on launch, in order. Idempotent. */
+export function pendingMigrations(settings: Settings, sessions: Session[], decisions: Decision[], now = new Date().toISOString()): Decision[] {
+  const first = schema2Migration(settings, sessions, decisions, now);
+  const second = ohpBackToBarbellMigration(settings, sessions, [...decisions, ...first], now);
+  return [...first, ...second];
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildCsv } from './csv';
-import { defaultSettings, deterministicId, schema2Migration, withDefaults } from './defaults';
+import { defaultSettings, deterministicId, ohpBackToBarbellMigration, pendingMigrations, schema2Migration, withDefaults } from './defaults';
 import {
   accessoriesRevealed,
   draftFromPlan,
@@ -33,19 +33,16 @@ function day1() {
   return t;
 }
 
-describe('1. migration: after the update the next workouts show the rehab exercises', () => {
-  it('Bench and OHP move to rehab at the first ladder rungs; nothing logged is touched', () => {
+describe('1. migration: after the update the next workouts show the rehab press', () => {
+  it('only Bench moves to rehab (first rung, 15 lb); Overhead Press stays on the barbell; nothing logged is touched', () => {
     const t = day1();
     const before = JSON.stringify(t.sessions);
     const made = schema2Migration(t.settings, t.sessions, t.decisions, '2026-01-02T00:00:00.000Z');
-    expect(made).toHaveLength(2);
-    expect(made.map((d) => d.body)).toEqual([
-      { kind: 'track_change', lift: 'bench', to: 'rehab', startWeight: 15 },
-      { kind: 'track_change', lift: 'ohp', to: 'rehab', startWeight: 12.5 },
-    ]);
+    expect(made.map((d) => d.body)).toEqual([{ kind: 'track_change', lift: 'bench', to: 'rehab', startWeight: 15 }]);
     expect(made.every((d) => d.afterSessionId === 's0')).toBe(true);
     t.decisions.push(...made);
     expect(JSON.stringify(t.sessions)).toBe(before);
+    expect(t.state().track).toMatchObject({ bench: 'rehab', ohp: 'linear', squat: 'linear', deadlift: 'linear' });
   });
 
   it('is idempotent and uses stable ids so two devices never duplicate it', () => {
@@ -54,25 +51,25 @@ describe('1. migration: after the update the next workouts show the rehab exerci
     const b = schema2Migration(t.settings, t.sessions, t.decisions, '2026-03-05T00:00:00.000Z');
     expect(a.map((d) => d.id)).toEqual(b.map((d) => d.id));
     expect(a[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(a[0].id).not.toBe(a[1].id);
     expect(deterministicId('x')).toBe(deterministicId('x'));
     t.decisions.push(...a);
     expect(schema2Migration(t.settings, t.sessions, t.decisions)).toEqual([]);
+    expect(pendingMigrations(t.settings, t.sessions, t.decisions)).toEqual([]);
   });
 
-  it('next is Workout B (Day 1 was A): Squat, Seated DB OHP 2 x 12.5 lb 3 x 10, Deadlift; then A: Squat, DB Floor Press 2 x 15 lb 3 x 10, Row 50', () => {
+  it('next is Workout B (Day 1 was A): Squat, Overhead Press 45 (empty bar), Deadlift; then A: Squat, DB Floor Press 2 x 15 lb 3 x 10, Row 50', () => {
     const t = day1();
     t.decisions.push(...schema2Migration(t.settings, t.sessions, t.decisions));
     let plan = planNextSession(t.state(), t.settings, TODAY);
     expect(plan.label).toBe('Workout B');
-    expect(plan.lifts.map((l) => l.lift)).toEqual(['squat', 'seated_db_ohp', 'deadlift']);
+    expect(plan.lifts.map((l) => l.lift)).toEqual(['squat', 'ohp', 'deadlift']);
     expect(plan.lifts[0].workingWeight).toBe(70);
-    const ohp = plan.lifts[1];
-    expect(ohp).toMatchObject({ perHand: true, workingWeight: 12.5, track: 'rehab', slot: 'ohp', cue: 'Lower for 3 s', warmups: [], platesPerSide: [] });
-    expect(ohp.sets.map((s) => [s.weight, s.reps])).toEqual([[12.5, 10], [12.5, 10], [12.5, 10]]);
+    expect(plan.lifts[1]).toMatchObject({ track: 'linear', workingWeight: 45, emptyBar: true, slot: 'ohp' });
+    expect(plan.lifts[1].perHand).toBeUndefined();
+    expect(plan.lifts[1].sets).toHaveLength(5);
     expect(plan.lifts[2].workingWeight).toBe(95);
 
-    t.log([linearLift('squat', 70, ok()), rehabLift(exO, 12.5, 10, undefined, pain(1)), linearLift('deadlift', 95, [5])]);
+    t.log([linearLift('squat', 70, ok()), withPain(linearLift('ohp', 45, ok()), 1), linearLift('deadlift', 95, [5])]);
     plan = planNextSession(t.state(), t.settings, TODAY);
     expect(plan.label).toBe('Workout A');
     expect(plan.lifts.map((l) => l.lift)).toEqual(['squat', 'db_floor_press', 'row']);
@@ -89,6 +86,101 @@ describe('1. migration: after the update the next workouts show the rehab exerci
     expect(st.linear.bench.weight).toBe(50); // barbell state untouched while on rehab
     expect(st.rehab.db_floor_press.sessions).toBe(1);
     expect(st.e1rm.bench).toHaveLength(1); // only the barbell session counts for the training max
+  });
+});
+
+describe('1b. Overhead Press goes back to the barbell', () => {
+  /** A phone that already ran the first version of the shoulder update: both presses were put on rehab. */
+  function migratedByFirstVersion() {
+    const t = day1();
+    const now = '2026-01-01T12:00:10.000Z'; // just after Day 1, before any later manual choice
+    const mk = (lift: 'bench' | 'ohp', startWeight: number) => ({
+      id: deterministicId(`schema2:track_change:${lift}:rehab`),
+      updatedAt: now,
+      deleted: false,
+      schemaVersion: 2,
+      createdAt: now,
+      afterSessionId: 's0',
+      body: { kind: 'track_change' as const, lift, to: 'rehab' as const, startWeight },
+    });
+    t.decisions.push(mk('bench', 15), mk('ohp', 12.5));
+    return t;
+  }
+
+  it('the first version\'s bench decision and the new one share an id, so nothing is duplicated', () => {
+    const t = migratedByFirstVersion();
+    expect(schema2Migration(t.settings, t.sessions, t.decisions)).toEqual([]); // track decisions already exist
+    const fresh = day1();
+    expect(schema2Migration(fresh.settings, fresh.sessions, fresh.decisions)[0].id).toBe(t.decisions[0].id);
+  });
+
+  it('puts OHP back on the barbell at the return weight (45), after the latest session; Bench stays on rehab', () => {
+    const t = migratedByFirstVersion();
+    t.log([linearLift('squat', 70, ok()), rehabLift(exO, 12.5, 10, undefined, pain(1)), linearLift('deadlift', 95, [5])]); // B on rehab OHP
+    expect(t.state().track.ohp).toBe('rehab');
+    const before = JSON.stringify(t.sessions);
+    const made = ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions, '2026-01-05T00:00:00.000Z');
+    expect(made).toHaveLength(1);
+    expect(made[0].body).toEqual({ kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: 45 });
+    expect(made[0].afterSessionId).toBe('s1'); // after the rehab OHP session just logged
+    t.decisions.push(...made);
+    expect(JSON.stringify(t.sessions)).toBe(before); // logged history untouched
+    const st = t.state();
+    expect(st.track).toMatchObject({ bench: 'rehab', ohp: 'linear' });
+    expect(st.linear.ohp).toMatchObject({ weight: 45, scheme: '5x5', streak: 0, deloadsInScheme: 0 });
+    // the rehab OHP session stays on record
+    expect(st.rehab.seated_db_ohp.sessions).toBe(1);
+  });
+
+  it('the next workouts: B has the barbell Overhead Press, A still has the DB Floor Press', () => {
+    const t = migratedByFirstVersion();
+    t.decisions.push(...ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions));
+    const b = planNextSession(t.state(), t.settings, TODAY);
+    expect(b.label).toBe('Workout B');
+    expect(b.lifts.map((l) => l.lift)).toEqual(['squat', 'ohp', 'deadlift']);
+    expect(b.lifts[1]).toMatchObject({ track: 'linear', workingWeight: 45, emptyBar: true });
+    t.log([linearLift('squat', 70, ok()), withPain(linearLift('ohp', 45, ok()), 1), linearLift('deadlift', 95, [5])]);
+    expect(t.state().linear.ohp.weight).toBe(50);
+    expect(planNextSession(t.state(), t.settings, TODAY).lifts.map((l) => l.lift)).toEqual(['squat', 'db_floor_press', 'row']);
+  });
+
+  it('runs once: a second call, a repeat on another device, and a launch after it all return nothing', () => {
+    const t = migratedByFirstVersion();
+    const first = ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions, '2026-01-05T00:00:00.000Z');
+    const other = ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions, '2026-02-09T00:00:00.000Z'); // another phone
+    expect(other.map((d) => d.id)).toEqual(first.map((d) => d.id));
+    t.decisions.push(...first);
+    expect(ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions)).toEqual([]);
+    expect(pendingMigrations(t.settings, t.sessions, t.decisions)).toEqual([]);
+  });
+
+  it('never overrides a later choice: moving OHP to rehab again in Settings sticks', () => {
+    const t = migratedByFirstVersion();
+    t.decisions.push(...ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions, '2026-01-01T12:00:20.000Z'));
+    t.decide({ kind: 'track_change', lift: 'ohp', to: 'rehab', startWeight: 12.5 }); // later, in Settings
+    expect(t.state().track.ohp).toBe('rehab');
+    expect(pendingMigrations(t.settings, t.sessions, t.decisions)).toEqual([]);
+  });
+
+  it('does nothing when OHP is not on rehab (a fresh install, or the lifter already moved it)', () => {
+    const fresh = day1();
+    expect(ohpBackToBarbellMigration(fresh.settings, fresh.sessions, fresh.decisions)).toEqual([]);
+    expect(pendingMigrations(fresh.settings, fresh.sessions, fresh.decisions).map((d) => d.body)).toEqual([
+      { kind: 'track_change', lift: 'bench', to: 'rehab', startWeight: 15 },
+    ]);
+    const moved = migratedByFirstVersion();
+    moved.decide({ kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: 60 }); // the lifter did it by hand
+    expect(ohpBackToBarbellMigration(moved.settings, moved.sessions, moved.decisions)).toEqual([]);
+    expect(moved.state().linear.ohp.weight).toBe(60);
+  });
+
+  it('accessories stay in rehab mode (3 sets) while Bench is still on rehab', () => {
+    const t = migratedByFirstVersion();
+    t.decisions.push(...ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions));
+    const plan = planNextSession(t.state(), t.settings, TODAY);
+    const host = plan.lifts[plan.lifts.length - 1];
+    expect(host.accessories!.every((x) => x.sets === 3)).toBe(true);
+    expect(t.state().accessoryAlerts).toEqual([]); // no "drops to 2 sets" yet: Bench is still on rehab
   });
 });
 
@@ -666,10 +758,11 @@ describe('13-14. what the plan and the draft contain', () => {
 
   it('the rehab card carries only what the prescription needs: weight per hand, sets, cue, no warm-ups or plates', () => {
     const t = settings();
-    const p = planned(t, exO)!;
+    t.log([linearLift('squat', 70, ok()), withPain(linearLift('ohp', 45, ok()), 1), linearLift('deadlift', 95, [5])]); // B first, so A (with the press) is next
+    const p = planned(t, ex)!;
     expect(p).toMatchObject({ perHand: true, cue: 'Lower for 3 s', warmups: [], platesPerSide: [], emptyBar: false, holding: false });
     expect(p.sets).toHaveLength(3);
-    expect(p.sets.every((s) => s.type === 'work' && s.weight === 12.5 && s.reps === 10)).toBe(true);
+    expect(p.sets.every((s) => s.type === 'work' && s.weight === 15 && s.reps === 10)).toBe(true);
   });
 });
 
@@ -677,7 +770,7 @@ describe('15. accessories live inside the last card', () => {
   function workoutA() {
     const t = day1();
     t.decisions.push(...schema2Migration(t.settings, t.sessions, t.decisions));
-    t.log([linearLift('squat', 70, ok()), rehabLift(exO, 12.5, 10, undefined, pain(1)), linearLift('deadlift', 95, [5])]);
+    t.log([linearLift('squat', 70, ok()), withPain(linearLift('ohp', 45, ok()), 1), linearLift('deadlift', 95, [5])]);
     return t; // next is Workout A: squat, DB floor press, row
   }
   const draftA = (t: Timeline) => draftFromPlan(planNextSession(t.state(), t.settings, TODAY), t.settings, 'd', '2026-01-10T10:00:00Z', '2026-01-10');

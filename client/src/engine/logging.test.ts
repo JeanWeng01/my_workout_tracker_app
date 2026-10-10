@@ -231,14 +231,16 @@ describe('notes', () => {
 });
 
 describe('rest time default', () => {
-  it('is 90 s for work sets, and an untouched saved 180 s default migrates; a custom one is kept', () => {
-    expect(defaultSettings().restSeconds.work).toBe(90);
-    const old = { ...defaultSettings(), restSeconds: { warmup: 60, work: 180, supplemental: 90 } };
-    expect(withDefaults(old).restSeconds.work).toBe(90);
-    const custom = { ...defaultSettings(), restSeconds: { warmup: 60, work: 120, supplemental: 90 } };
-    expect(withDefaults(custom).restSeconds.work).toBe(120);
-    const legacy = { ...defaultSettings() } as Partial<typeof old>;
+  it('is 3 minutes for work sets; the briefly shipped 1:30 default moves back; a custom time is kept', () => {
+    expect(defaultSettings().restSeconds).toEqual({ warmup: 60, work: 180, supplemental: 90 });
+    const brief = { ...defaultSettings(), restSeconds: { warmup: 60, work: 90, supplemental: 90 } };
+    expect(withDefaults(brief).restSeconds.work).toBe(180);
+    const original = { ...defaultSettings(), restSeconds: { warmup: 60, work: 180, supplemental: 90 } };
+    expect(withDefaults(original).restSeconds.work).toBe(180);
+    const custom = { ...defaultSettings(), restSeconds: { warmup: 45, work: 120, supplemental: 90 } };
+    expect(withDefaults(custom).restSeconds).toEqual({ warmup: 45, work: 120, supplemental: 90 });
+    const legacy = { ...defaultSettings() } as Partial<typeof brief>;
     delete legacy.restSeconds;
-    expect(withDefaults(legacy as typeof old).restSeconds.work).toBe(90);
+    expect(withDefaults(legacy as typeof brief).restSeconds.work).toBe(180);
   });
 });

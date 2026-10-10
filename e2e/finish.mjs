@@ -1,4 +1,4 @@
-// Auto-finish popup, 1:30 rest timer, and workout notes (typed, kept, exported in the CSV).
+// Auto-finish popup, 3:00 rest timer, and workout notes (typed, kept, exported in the CSV).
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
@@ -26,11 +26,11 @@ await page.getByRole('button', { name: '← Home' }).click();
 await page.getByRole('button', { name: 'Start workout' }).click();
 await page.getByRole('button', { name: /Squat/ }).waitFor();
 
-// 1:30 rest after the first work set
+// 3:00 rest after the first work set
 await page.getByRole('button', { name: /Squat/ }).click();
 await page.getByRole('button', { name: /Complete set/ }).first().click();
 const timer = await page.getByRole('timer').innerText();
-check('rest timer starts at 1:30', /1:30|1:29/.test(timer));
+check('rest timer starts at 3:00', /3:00|2:59/.test(timer));
 
 // A note, typed before the workout ends
 await page.getByRole('button', { name: 'Note', exact: true }).click();
