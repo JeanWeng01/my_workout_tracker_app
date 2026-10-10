@@ -32,7 +32,7 @@ check('warm-up row present', await page.getByText(/Warm-up/).first().isVisible()
 const checks = page.getByRole('button', { name: /Complete set/ });
 await checks.first().click();
 check('rest timer shows after completing a set', await page.getByRole('timer').isVisible());
-check('check button pressed', (await checks.first().getAttribute('aria-pressed')) === 'true');
+check('check button pressed', await page.waitForFunction(() => document.querySelector('button[aria-label^="Complete set"]')?.getAttribute('aria-pressed') === 'true', null, { timeout: 3000 }).then(() => true).catch(() => false));
 check('timer has no buttons', (await page.getByRole('timer').getByRole('button').count()) === 0);
 await shot('03-set-done-timer');
 
