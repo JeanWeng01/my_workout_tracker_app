@@ -14,6 +14,9 @@ import {
   liftsWithUntouched,
   planNextSession,
   resolveUntouched,
+  planKeyOfDraft,
+  planKeyOfPlan,
+  draftStarted,
   retroFinishedAt,
   pendingMigrations,
   SCHEMA_VERSION,
@@ -154,7 +157,7 @@ export async function finishWorkout(id: string): Promise<FinishResult> {
     }
     // A workout recovered from "left unfinished" counts on the day it was done (see retroFinishedAt).
     const stamp = cur.abandonedAt ? retroFinishedAt(cur.date, nowIso()) : nowIso();
-    const finished = { ...finishSession(resolved, stamp), dirty: 1 as const };
+    const finished = { ...finishSession(resolved, stamp, nowIso()), dirty: 1 as const };
     await db.sessions.put(finished);
 
     const settings = await ensureSettings();
@@ -162,10 +165,32 @@ export async function finishWorkout(id: string): Promise<FinishResult> {
     const grad = checkGraduation(settings, sessions, decisions, id);
     if (grad) await db.decisions.put({ ...grad, dirty: 1 });
     return { graduated: !!grad, discarded: false };
-  }).then((r) => {
+  }).then(async (r) => {
+    await reconcileDraft(); // finishing a recovered workout changes the plan for any workout already in progress
     scheduleSync();
     return r;
   });
+}
+
+/**
+ * After the history changed (a past workout was finished, edited or deleted), a workout already in progress may have been
+ * planned from the old history. If nothing in it has been ticked yet it is simply dropped, and the next Start plans afresh.
+ * If it has been started it is kept, and Home offers to start it over.
+ */
+export async function reconcileDraft(): Promise<void> {
+  const draft = await getDraft();
+  if (!draft) return;
+  const settings = await ensureSettings();
+  const [sessions, decisions] = await Promise.all([db.sessions.toArray(), db.decisions.toArray()]);
+  const plan = planNextSession(deriveState(settings, sessions, decisions), settings, localDate());
+  if (planKeyOfDraft(draft) === planKeyOfPlan(plan)) return;
+  if (!draftStarted(draft)) await db.sessions.delete(draft.id);
+}
+
+/** Throw away the workout in progress so the next Start plans it again from the current history. */
+export async function startOver(id: string): Promise<void> {
+  const cur = await db.sessions.get(id);
+  if (cur && cur.finishedAt === null && !cur.abandonedAt) await db.sessions.delete(id);
 }
 
 /** Saves a decision after the latest finished session. */

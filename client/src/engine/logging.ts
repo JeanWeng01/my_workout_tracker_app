@@ -102,12 +102,16 @@ export function setSetValues(s: Session, li: number, si: number, values: { weigh
   }));
 }
 
-/** Moves every not-yet-done work set of a lift to a new weight (barbell stepper, or the next dumbbell rung). */
-export function setWorkingWeight(s: Session, li: number, weight: number): Session {
+/**
+ * Moves the work sets of a lift to a new weight (barbell stepper, or the next dumbbell rung). While a workout is in progress
+ * only the sets not done yet move; when editing a finished or reopened workout (`includeDone`) every work set moves, because
+ * they are all done already.
+ */
+export function setWorkingWeight(s: Session, li: number, weight: number, includeDone = false): Session {
   return {
     ...s,
     lifts: s.lifts.map((l, i) =>
-      i !== li ? l : { ...l, sets: l.sets.map((x) => (!x.done && (x.type === 'work' || x.type === 'amrap') ? { ...x, weight } : x)) },
+      i !== li ? l : { ...l, sets: l.sets.map((x) => ((includeDone || !x.done) && (x.type === 'work' || x.type === 'amrap') ? { ...x, weight } : x)) },
     ),
   };
 }
@@ -161,10 +165,38 @@ export function resolveUntouched(s: Session): Session {
   };
 }
 
-export function finishSession(s: Session, nowIso: string): Session {
+/**
+ * `finishedAt` is when the workout counts in the history (for a recovered workout: the end of the day it was done).
+ * `updatedAt` is when this record was last changed, and **must be the real time**: sync keeps whichever copy of a record has
+ * the newer `updatedAt`, so stamping a recovered workout with an old date would let the old "unfinished" copy win and undo it.
+ */
+export function finishSession(s: Session, finishedAtIso: string, updatedAtIso: string = finishedAtIso): Session {
   // Finishing also clears "left unfinished", so a recovered workout turns green.
-  return { ...s, finishedAt: nowIso, updatedAt: nowIso, abandonedAt: null };
+  return { ...s, finishedAt: finishedAtIso, updatedAt: updatedAtIso, abandonedAt: null };
 }
+
+/**
+ * A fingerprint of what a workout was planned as: the lifts, schemes and target weights x reps. A draft is built from the
+ * plan, so if the history changes afterwards (a past workout was edited or recovered) the draft no longer matches the plan.
+ */
+export function planKey(lifts: { lift: string; scheme: string; sets: { weight: number; reps: number }[] }[]): string {
+  return JSON.stringify(lifts.map((l) => [l.lift, l.scheme, l.sets.map((x) => `${x.weight}x${x.reps}`)]));
+}
+
+export const planKeyOfPlan = (plan: SessionPlan): string => planKey(plan.lifts.map((l) => ({ lift: l.lift, scheme: l.scheme, sets: l.sets.map((x) => ({ weight: x.weight, reps: x.reps })) })));
+
+/** The same fingerprint worked out from a draft's own targets (what was planned, not what was lifted). */
+export const planKeyOfDraft = (s: Session): string =>
+  planKey(
+    s.lifts.map((l) => ({
+      lift: l.lift,
+      scheme: l.scheme,
+      sets: l.sets.filter((x) => x.type === 'work' || x.type === 'amrap' || x.type === 'supplemental').map((x) => ({ weight: x.targetWeight, reps: x.targetReps })),
+    })),
+  );
+
+/** Some set of this draft has been ticked. */
+export const draftStarted = (s: Session): boolean => s.lifts.some((l) => l.sets.some((x) => x.done));
 
 /**
  * When a workout that was left unfinished is finished later, it counts on the day it was done, not the day it was

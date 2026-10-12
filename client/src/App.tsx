@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { startAutoSync } from './data/sync';
-import { startWorkout } from './data/store';
+import { reconcileDraft, startOver, startWorkout } from './data/store';
 import { useProgram, type Program } from './data/useProgram';
 import { Congrats } from './screens/Congrats';
 import { Home } from './screens/Home';
@@ -32,6 +32,7 @@ export function App() {
     const leave = (graduated?: boolean) => {
       if (planSignature(program) !== screen.planBefore || program.state.revertedAutoSwitch) setNotice('Plan updated from your history edit.');
       home();
+      void reconcileDraft(); // an edited, recovered or deleted workout changes what any workout in progress should be
       if (graduated) setCongrats(true); // recovering an unfinished workout can be the one that graduates the program
     };
     if (!past) {
@@ -60,6 +61,7 @@ export function App() {
       program={program}
       notice={notice}
       onDismissNotice={() => setNotice(null)}
+      onStartOver={() => (program.draft ? startOver(program.draft.id) : Promise.resolve())}
       onSettings={() => setScreen({ kind: 'settings' })}
       onOpenSession={(id) => setScreen({ kind: 'past', id, planBefore: planSignature(program) })}
       onStart={async () => {

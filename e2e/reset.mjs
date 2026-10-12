@@ -59,6 +59,8 @@ await page.evaluate(async () => {
 await page.reload();
 await page.getByText('Ego lifts').waitFor();
 await page.getByRole('heading', { name: /Workout/ }).waitFor();
+// the old draft is turned into an unfinished day a moment after the app opens
+await page.getByText('Last workout was left unfinished').waitFor({ timeout: 5000 }).catch(() => {});
 const home = await page.locator('body').innerText();
 check('after 12+ hours the workout is not resumable any more (Start, not Resume)', (await page.getByRole('button', { name: 'Start workout' }).count()) === 1 && (await page.getByRole('button', { name: 'Resume workout' }).count()) === 0);
 check('Home says it will be redone from the top', home.includes('Last workout was left unfinished. Starting it over from the top.'));

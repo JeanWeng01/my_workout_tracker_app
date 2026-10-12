@@ -244,3 +244,23 @@ describe('rest time default', () => {
     expect(withDefaults(legacy as typeof brief).restSeconds.work).toBe(180);
   });
 });
+
+describe('weight stepper', () => {
+  it('in a live workout it only moves the sets not done yet; when editing a finished workout it moves every work set', () => {
+    let d = fresh();
+    const si = firstWork(d);
+    d = toggleSet(d, 0, si); // first work set done
+    const live = setWorkingWeight(d, 0, 210);
+    const liveWork = live.lifts[0].sets.filter((x) => x.type === 'work');
+    expect(liveWork[0].weight).toBe(200); // the done set keeps what was lifted
+    expect(liveWork.slice(1).every((x) => x.weight === 210)).toBe(true);
+
+    for (let j = 0; j < d.lifts[0].sets.length; j++) if (d.lifts[0].sets[j].type === 'work' && !d.lifts[0].sets[j].done) d = toggleSet(d, 0, j);
+    const finishedEdit = setWorkingWeight(d, 0, 195, true);
+    const all = finishedEdit.lifts[0].sets.filter((x) => x.type === 'work');
+    expect(all.every((x) => x.weight === 195 && x.done && x.reps === 5)).toBe(true); // weights change, results stay
+    expect(finishedEdit.lifts[0].sets.filter((x) => x.type === 'warmup').every((x) => x.weight < 195)).toBe(true); // warm-ups untouched
+    // without the flag nothing moves, because every set is done (the old, wrong behaviour in a finished workout)
+    expect(setWorkingWeight(d, 0, 195).lifts[0].sets.filter((x) => x.type === 'work').every((x) => x.weight === 200)).toBe(true);
+  });
+});

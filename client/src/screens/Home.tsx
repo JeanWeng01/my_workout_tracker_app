@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Program } from '../data/useProgram';
-import { LIFT_NAME } from '../engine';
+import { draftStarted, LIFT_NAME, planKeyOfDraft, planKeyOfPlan } from '../engine';
 import { useSyncLine } from '../data/sync';
 import { Calendar } from './Calendar';
 import { Mantra } from './Mantra';
@@ -22,10 +22,14 @@ interface HomeProps {
   onOpenSession: (id: string) => void;
   notice: string | null;
   onDismissNotice: () => void;
+  /** Throw the workout in progress away so it is planned again from the current history. */
+  onStartOver: () => Promise<void>;
 }
 
-export function Home({ program, onStart, onSettings, onOpenSession, notice, onDismissNotice }: HomeProps) {
+export function Home({ program, onStart, onSettings, onOpenSession, notice, onDismissNotice, onStartOver }: HomeProps) {
   const [calOpen, setCalOpen] = useState(false);
+  const [keepStale, setKeepStale] = useState(false);
+  const [confirmOver, setConfirmOver] = useState(false);
   const syncLine = useSyncLine();
   const { plan, state, draft, sessions } = program;
   // The most recent attempt was left unfinished and nothing was finished since.
@@ -33,6 +37,8 @@ export function Home({ program, onStart, onSettings, onOpenSession, notice, onDi
     .filter((s) => !s.deleted && (s.finishedAt || s.abandonedAt))
     .sort((a, b) => ((a.finishedAt ?? a.abandonedAt!) < (b.finishedAt ?? b.abandonedAt!) ? -1 : 1))
     .pop();
+  // The workout in progress was planned from older history than the plan we would make now.
+  const stale = !!draft && planKeyOfDraft(draft) !== planKeyOfPlan(plan);
   const redo = !draft && !!latest && !latest.finishedAt;
   const alerts = plan.alerts;
 
@@ -46,6 +52,25 @@ export function Home({ program, onStart, onSettings, onOpenSession, notice, onDi
       {notice && (
         <div className="bubble notice" role="status">
           {notice} <button className="btn-link" onClick={onDismissNotice}>OK</button>
+        </div>
+      )}
+
+      {stale && !keepStale && draft && (
+        <div className="bubble notice" role="alert">
+          Your workout in progress was planned before your history changed, so its weights may be out of date.
+          {confirmOver && draftStarted(draft) ? ' Starting over clears the sets you have ticked in it.' : ''}
+          <div className="banner-actions" style={{ marginTop: 8 }}>
+            <button
+              className="banner-btn"
+              onClick={() => {
+                if (draftStarted(draft) && !confirmOver) setConfirmOver(true);
+                else void onStartOver();
+              }}
+            >
+              {confirmOver ? 'Yes, start over' : 'Start over'}
+            </button>
+            <button className="banner-btn" onClick={() => setKeepStale(true)}>Keep going</button>
+          </div>
         </div>
       )}
 

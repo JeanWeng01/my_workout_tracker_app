@@ -66,3 +66,60 @@ describe('recovering a workout that was left unfinished', () => {
     expect(withSet.lifts[0].sets[3].done).toBe(true);
   });
 });
+
+describe('finishing never makes a record look older (the sync rule is last-write-wins on updatedAt)', () => {
+  it('a recovered workout counts on its own day but is last-changed NOW, so it beats the unfinished copy', () => {
+    const t = new Timeline();
+    const s = t.log([linearLift('squat', 65, ok())], 'linear', 0);
+    const abandonedAt = '2026-01-12T08:00:00.000Z'; // Monday morning: the app reset it
+    const unfinished = abandonSession({ ...s, finishedAt: null }, abandonedAt); // what the server holds
+    const now = '2026-01-12T09:30:00.000Z';
+    const recovered = finishSession(unfinished, retroFinishedAt(s.date, now), now);
+    expect(recovered.finishedAt! < abandonedAt).toBe(true); // it counts on the earlier day...
+    expect(recovered.updatedAt).toBe(now); // ...but was changed after the unfinished copy
+    expect(recovered.updatedAt > unfinished.updatedAt).toBe(true); // so it wins when records are merged
+    expect(recovered.abandonedAt).toBeNull();
+  });
+
+  it('without a separate updatedAt it defaults to the finish time (a normal workout finished now)', () => {
+    const t = new Timeline();
+    const s = { ...t.log([linearLift('squat', 65, ok())]), finishedAt: null };
+    const done = finishSession(s, '2026-01-05T10:00:00.000Z');
+    expect(done.updatedAt).toBe('2026-01-05T10:00:00.000Z');
+  });
+});
+
+import { draftFromPlan, draftStarted, planKeyOfDraft, planKeyOfPlan, setWorkingWeight } from './logging';
+import { planNextSession } from './plan';
+
+describe('a workout in progress versus the current plan', () => {
+  const plannedDraft = (t: Timeline) => {
+    const plan = planNextSession(t.state(), t.settings, '2026-01-20');
+    return { plan, draft: draftFromPlan(plan, t.settings, 'd', '2026-01-20T10:00:00Z', '2026-01-20') };
+  };
+
+  it('a draft matches the plan it was made from', () => {
+    const t = new Timeline();
+    const { plan, draft } = plannedDraft(t);
+    expect(planKeyOfDraft(draft)).toBe(planKeyOfPlan(plan));
+  });
+
+  it('stays matching while you work: ticking sets and editing the weight change what was lifted, not what was planned', () => {
+    const t = new Timeline();
+    const { plan, draft } = plannedDraft(t);
+    const i = draft.lifts[0].sets.findIndex((x) => x.type === 'work');
+    let d = toggleSet(draft, 0, i);
+    d = setWorkingWeight(d, 0, 100);
+    expect(planKeyOfDraft(d)).toBe(planKeyOfPlan(plan));
+    expect(draftStarted(draft)).toBe(false);
+    expect(draftStarted(d)).toBe(true);
+  });
+
+  it('stops matching once the history changes: finishing an old workout changes the plan', () => {
+    const t = new Timeline();
+    const { draft } = plannedDraft(t); // planned with nothing in the history: squat 65, Workout A
+    t.log([linearLift('squat', 65, ok())]); // a past workout gets finished afterwards
+    const newPlan = planNextSession(t.state(), t.settings, '2026-01-20');
+    expect(planKeyOfDraft(draft)).not.toBe(planKeyOfPlan(newPlan));
+  });
+});

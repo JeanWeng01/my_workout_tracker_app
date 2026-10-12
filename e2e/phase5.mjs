@@ -68,7 +68,8 @@ await shot('10-calendar');
 await page.getByRole('button', { name: `${monthDay(dA)}, 1 workout` }).click();
 await page.getByRole('button', { name: /Delete workout/ }).waitFor();
 check('past session opens editable', true);
-check('...with its cards already open (nothing to expand first)', await page.getByRole('button', { name: /Complete set/ }).first().isVisible());
+check('...with its cards collapsed, like everywhere else', (await page.getByRole('button', { name: /Complete set/ }).count()) === 0);
+await page.getByRole('button', { name: /Squat/ }).click(); // open a card to edit it
 await page.getByRole('button', { name: /Complete set/ }).first().click();
 await shot('11-past-edit');
 await page.getByRole('button', { name: 'Done' }).click();

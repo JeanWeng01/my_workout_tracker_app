@@ -74,12 +74,15 @@ await shot('50-calendar-yellow');
 await yellow.click();
 await page.getByText('This workout was left unfinished.').waitFor();
 check('it opens, with a banner saying what to do', true);
-check('...its cards are already open and its warm-up sets are showing', (await page.locator('.warm-row').first().isVisible()) && (await page.getByRole('button', { name: /^Complete set/ }).count()) > 0);
+check('...its cards start collapsed; opening one shows its warm-up sets and sets', (await page.getByRole('button', { name: /^Complete set/ }).count()) === 0);
+await page.getByRole('button', { name: /^Squat/ }).click();
+check('...the opened card has its warm-up sets showing and its sets editable', (await page.locator('.warm-row').first().isVisible()) && (await page.getByRole('button', { name: /^Complete set/ }).count()) === 5);
 check('...with Finish workout, and no "Can\'t finish today"', (await page.getByRole('button', { name: 'Finish workout' }).isVisible()) && (await page.getByRole('button', { name: "Can't finish today" }).count()) === 0);
 check('the sets that were done are still green', (await page.locator('.card', { hasText: 'Squat' }).getByRole('button', { name: /^Complete set/ }).evaluateAll((els) => els.filter((e) => e.getAttribute('aria-pressed') === 'true').length)) === 5);
 await shot('51-recovered');
 
 // ---- Edit it: tap a set that was missed, then finish
+await page.getByRole('button', { name: /^DB Floor Press/ }).click();
 const press = page.locator('.card', { hasText: 'DB Floor Press' });
 await press.getByRole('button', { name: /^Complete set/ }).first().click();
 await page.waitForFunction(() => [...document.querySelectorAll('.card')].find((c) => c.textContent.includes('DB Floor Press'))?.querySelector('button[aria-label^="Complete set"]')?.getAttribute('aria-pressed') === 'true', null, { timeout: 3000 });

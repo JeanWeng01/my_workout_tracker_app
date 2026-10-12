@@ -88,10 +88,10 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
   const log: LoggedLift = session.lifts[li];
   const lift = log.lift;
   const settings = program.settings;
-  // A finished workout, or one that was left unfinished, is being edited after the fact: changes are saved to its record,
-  // there are no rest timers or live alerts, and its cards start open so it is obvious everything can be edited.
+  // A finished workout, or one that was left unfinished, is being edited after the fact: changes are saved to its record
+  // and there are no rest timers or live alerts. Cards start collapsed like everywhere else; tap one to open it and edit.
   const past = session.finishedAt !== null || !!session.abandonedAt;
-  const [open, setOpen] = useState(past);
+  const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<{ si: number } | null>(null);
   const act = (fn: (s: Session) => Session) => void (past ? updateSession(session.id, fn) : updateDraft(session.id, fn));
 
@@ -134,6 +134,9 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
 
   const chipTap = (si: number) => {
     const set = log.sets[si];
+    // Editing after the fact: tapping a set opens its editor (weight and reps, each with + and −). In a live workout a tap
+    // steps the reps down instead.
+    if (past) return setEdit({ si });
     if (set.type === 'amrap' && set.done) return setEdit({ si });
     act((s) => stepReps(s, li, si));
   };
@@ -210,9 +213,9 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
               {rehab && (
                 <>
                   <div className="weight-edit">
-                    <button className="step-btn" aria-label="Lower dumbbell weight" onClick={() => act((s) => setWorkingWeight(s, li, prevBelow(ladder, working) ?? working))}>−</button>
+                    <button className="step-btn" aria-label="Lower dumbbell weight" onClick={() => act((s) => setWorkingWeight(s, li, prevBelow(ladder, working) ?? working, past))}>−</button>
                     <span className="weight-big num dumbbell">2 × {fmtWeight(working)} lb</span>
-                    <button className="step-btn" aria-label="Raise dumbbell weight" onClick={() => act((s) => setWorkingWeight(s, li, nextAbove(ladder, working) ?? working))}>+</button>
+                    <button className="step-btn" aria-label="Raise dumbbell weight" onClick={() => act((s) => setWorkingWeight(s, li, nextAbove(ladder, working) ?? working, past))}>+</button>
                   </div>
                   <div className="small">Lower for 3 s</div>
                 </>
@@ -220,9 +223,9 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
 
               {barbellLinear && (
                 <div className="weight-edit">
-                  <button className="step-btn" aria-label="Lower working weight" onClick={() => act((s) => setWorkingWeight(s, li, Math.max(bar, working - step)))}>−</button>
+                  <button className="step-btn" aria-label="Lower working weight" onClick={() => act((s) => setWorkingWeight(s, li, Math.max(bar, working - step), past))}>−</button>
                   <span className="weight-big num">{working}</span>
-                  <button className="step-btn" aria-label="Raise working weight" onClick={() => act((s) => setWorkingWeight(s, li, working + step))}>+</button>
+                  <button className="step-btn" aria-label="Raise working weight" onClick={() => act((s) => setWorkingWeight(s, li, working + step, past))}>+</button>
                 </div>
               )}
               {barbell && <div className="small">{working <= bar ? 'empty bar' : `per side: ${plates.join(' + ') || '—'}`}</div>}
