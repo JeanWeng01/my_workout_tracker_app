@@ -85,7 +85,7 @@ export function Home({ program, onStart, onSettings, onOpenSession, notice, onDi
             </div>
           ))}
           <div style={{ height: 16 }} />
-          <button className="btn" onClick={onStart}>{draft ? 'Resume workout' : 'Start workout'}</button>
+          <button className="btn" onClick={onStart}>{draft ? (stale ? 'Resume workout (out of date)' : 'Resume workout') : 'Start workout'}</button>
           {alerts.length > 0 && (
             <div className="bubble-alerts">
               {alerts.map((a) => <div className="small" key={a.lift + a.kind}>⚠ {a.message}</div>)}

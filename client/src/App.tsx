@@ -19,6 +19,20 @@ export function App() {
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   const [congrats, setCongrats] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // An installed web app keeps showing the old version until it reloads. When a newer version takes over in the background,
+  // reload as soon as we are on Home (never mid-workout; drafts autosave anyway), so a deploy shows up on the next open.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return; // first ever visit: nothing to replace
+    const onChange = () => setUpdateReady(true);
+    navigator.serviceWorker.addEventListener('controllerchange', onChange);
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onChange);
+  }, []);
+  useEffect(() => {
+    if (updateReady && screen.kind === 'home' && !congrats) window.location.reload();
+  }, [updateReady, screen.kind, congrats]);
+
   if (!program) return null;
 
   const home = () => setScreen({ kind: 'home' });

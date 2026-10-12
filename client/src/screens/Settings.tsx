@@ -110,7 +110,10 @@ export function SettingsScreen({ program, onBack }: { program: Program; onBack: 
       <DataGroup program={program} setMsg={setMsg} />
       {msg && <div className="bubble set-group" role="status" style={{ fontWeight: 700 }}>{msg}</div>}
 
-      <div className="section"><button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setView('about')}>About the rules</button></div>
+      <div className="section">
+        <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setView('about')}>About the rules</button>
+        <div className="small">Version {__APP_VERSION__}</div>
+      </div>
     </div>
   );
 }

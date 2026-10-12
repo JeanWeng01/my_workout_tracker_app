@@ -34,6 +34,23 @@ await page.reload();
 await page.getByText('Ego lifts').waitFor();
 check('service worker controls the page', await page.evaluate(() => !!navigator.serviceWorker.controller));
 
+// A new version taking over: reload on Home, but never in the middle of a workout.
+await page.evaluate(() => { window.__marker = 1; navigator.serviceWorker.dispatchEvent(new Event('controllerchange')); });
+await page.waitForFunction(() => window.__marker === undefined, null, { timeout: 5000 }).then(() => check('a new version taking over reloads the app while on Home', true)).catch(() => check('a new version taking over reloads the app while on Home', false));
+await page.getByText('Ego lifts').waitFor();
+await page.getByRole('button', { name: 'Start workout' }).click();
+await page.getByRole('button', { name: /^Squat/ }).waitFor();
+await page.evaluate(() => { window.__marker = 2; navigator.serviceWorker.dispatchEvent(new Event('controllerchange')); });
+await page.waitForTimeout(1500);
+check('...but not in the middle of a workout', (await page.evaluate(() => window.__marker)) === 2);
+await page.getByRole('button', { name: /Home/ }).click();
+await page.waitForFunction(() => window.__marker === undefined, null, { timeout: 5000 }).then(() => check('...it reloads once you are back on Home', true)).catch(() => check('...it reloads once you are back on Home', false));
+await page.getByText('Ego lifts').waitFor();
+await page.getByRole('button', { name: 'Settings' }).click();
+check('Settings shows which version is running', /Version (?:[0-9a-f]{7}|local) · built [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC/.test(await page.locator('body').innerText()));
+await page.getByRole('button', { name: '← Home' }).click();
+
+
 // Precache holds the shell and the fonts
 const cached = await page.evaluate(async () => {
   const urls = [];

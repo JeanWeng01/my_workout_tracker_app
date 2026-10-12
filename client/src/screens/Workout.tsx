@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { deleteSession, exitWorkout, finishWorkout, needsUntouchedChoice, setTemplate, updateDraft, updateSession } from '../data/store';
 import type { Program } from '../data/useProgram';
 import { hasUntouchedMainWork, isWorkoutComplete, liftsNeedingRating, setNotes, setPain, skipPain, type PainRating, type Session, type Template } from '../engine';
@@ -75,13 +75,18 @@ export function Workout({ session, program, onExit }: { session: Session; progra
 
   // Every set green: (rate the shoulder if needed, then) show the popup for 2 seconds and finish on its own.
   const complete = !past && isWorkoutComplete(session);
+  // Only a set ticked during this visit can finish the workout by itself. Opening one that is already complete (say, one left
+  // over from before the history changed) must not finish it behind your back: it waits for you to change something or tap Finish.
+  const openedComplete = useRef(complete);
   useEffect(() => {
     if (!complete) {
+      openedComplete.current = false;
       setCelebrate(false);
       setHeld(false);
       setAnswered([]);
       return;
     }
+    if (openedComplete.current) return;
     if (held) return;
     if (needing.length > 0) {
       if (!ratingQueue) setRatingQueue(needing);

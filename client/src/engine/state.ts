@@ -81,6 +81,9 @@ export function daysBetween(from: string, to: string): number {
 
 const BARBELL_NAME: Record<'bench' | 'ohp', string> = { bench: 'bench press', ohp: 'overhead press' };
 
+/** A lift's name inside a sentence: "bench", "squat", but "OHP" keeps its capitals. */
+const lcName = (lift: Lift): string => (lift === 'ohp' ? 'OHP' : LIFT_SHORT[lift].toLowerCase());
+
 // ---------- initial state ----------
 
 function freshLinear(lift: Lift, weight: number): LinearLiftState {
@@ -211,7 +214,7 @@ function applyLinearLift(ls: LinearLiftState, l: LoggedLift, lift: Lift, date: s
         lift,
         severity: 'action',
         value: to,
-        message: `${describePain(l.pain!)}. Dial ${name.toLowerCase()} down to ${to}?`,
+        message: `${describePain(l.pain!)}. Dial ${lcName(lift)} down to ${to}?`,
       };
     }
     return;
@@ -223,7 +226,7 @@ function applyLinearLift(ls: LinearLiftState, l: LoggedLift, lift: Lift, date: s
       kind: 'linear_amber',
       lift,
       severity: 'info',
-      message: `${describePain(l.pain!)}, so ${name.toLowerCase()} holds at ${W} next time. This doesn't count as a miss.`,
+      message: `${describePain(l.pain!)}, so ${lcName(lift)} holds at ${W} next time. This doesn't count as a miss.`,
     };
     return;
   }
@@ -269,7 +272,7 @@ function applyLinearLift(ls: LinearLiftState, l: LoggedLift, lift: Lift, date: s
       lift,
       severity: 'action',
       value: W,
-      message: `${ordinal(ls.deloadsInScheme + 1)} stall on 5×5. Switch ${name.toLowerCase()} to 3×5 at ${W}?`,
+      message: `${ordinal(ls.deloadsInScheme + 1)} stall on 5×5. Switch ${lcName(lift)} to 3×5 at ${W}?`,
     };
   } else {
     ls.complete = true;
@@ -344,7 +347,7 @@ function applyWaveLift(ws: WaveLiftState, l: LoggedLift, lift: MainLift, date: s
             lift,
             severity: 'action',
             value: to,
-            message: `Two cycles in a row short of minimums. Reset ${name.toLowerCase()} training max ${ws.tm} → ${to}?`,
+            message: `Two cycles in a row short of minimums. Reset ${lcName(lift)} training max ${ws.tm} → ${to}?`,
           };
         }
       }
