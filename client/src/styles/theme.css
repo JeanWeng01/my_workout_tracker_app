@@ -244,3 +244,4 @@ body {
 .acc-title { font-weight: 700; color: var(--ink); }
 .card-weight.dumbbell { font-size: 26px; text-align: right; }
 .weight-big.dumbbell { font-size: 30px; min-width: 150px; }
+.warm-title { margin: 6px 0 0; }

@@ -26,7 +26,7 @@ await page.getByRole('button', { name: 'Start workout' }).click();
 await page.getByText('Workout A', { exact: true }).first().waitFor();
 await page.getByRole('button', { name: /Squat/ }).click();
 await shot('02-squat-open');
-check('warm-up row present', await page.getByText(/Warm-up/).first().isVisible());
+check('warm-up sets are open with the card (no link to expand)', (await page.locator('.warm-row').first().isVisible()) && (await page.getByRole('button', { name: /Warm-up/ }).count()) === 0);
 
 // complete first work set -> rest timer appears, check turns green
 const checks = page.getByRole('button', { name: /Complete set/ });

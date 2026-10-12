@@ -29,9 +29,10 @@ export function App() {
 
   if (screen.kind === 'past') {
     const past = program.sessions.find((s) => s.id === screen.id && !s.deleted);
-    const leave = () => {
+    const leave = (graduated?: boolean) => {
       if (planSignature(program) !== screen.planBefore || program.state.revertedAutoSwitch) setNotice('Plan updated from your history edit.');
       home();
+      if (graduated) setCongrats(true); // recovering an unfinished workout can be the one that graduates the program
     };
     if (!past) {
       leave();

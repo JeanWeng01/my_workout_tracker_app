@@ -162,8 +162,22 @@ export function resolveUntouched(s: Session): Session {
 }
 
 export function finishSession(s: Session, nowIso: string): Session {
-  return { ...s, finishedAt: nowIso, updatedAt: nowIso };
+  // Finishing also clears "left unfinished", so a recovered workout turns green.
+  return { ...s, finishedAt: nowIso, updatedAt: nowIso, abandonedAt: null };
 }
+
+/**
+ * When a workout that was left unfinished is finished later, it counts on the day it was done, not the day it was
+ * recovered: end of that local day, or now if that day is today. This keeps it in the right place in the history
+ * (and so in the A/B order and the progression) next to the workouts done in between.
+ */
+export function retroFinishedAt(localDate: string, nowIso: string): string {
+  const endOfDay = new Date(`${localDate}T23:59:00`).toISOString();
+  return endOfDay < nowIso ? endOfDay : nowIso;
+}
+
+/** A session that was left unfinished (yellow day) and can still be opened and finished. */
+export const isUnfinished = (s: Session): boolean => !s.deleted && s.finishedAt === null && !!s.abandonedAt;
 
 /** True when nothing was logged at all (nothing to save). The band pull-aparts alone don't make a workout. */
 export function isEmptyDraft(s: Session): boolean {

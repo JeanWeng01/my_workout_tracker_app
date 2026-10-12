@@ -60,15 +60,15 @@ check('after seeding, squat is planned at 70', await page.getByText('70', { exac
 await page.getByRole('button', { name: 'Workout calendar' }).click();
 check('calendar shows Total workouts: 1', await page.getByText('Total workouts: 1').isVisible());
 check('finished day labelled', (await page.getByRole('button', { name: `${monthDay(dA)}, 1 workout` }).count()) === 1);
-check('unfinished day labelled', (await page.getByRole('button', { name: `${monthDay(dB)}, workout unfinished` }).count()) === 1);
-check('unfinished day is not tappable', await page.getByRole('button', { name: `${monthDay(dB)}, workout unfinished` }).isDisabled());
+check('unfinished day labelled', (await page.getByRole('button', { name: new RegExp(`^${monthDay(dB)}, workout unfinished`) }).count()) === 1);
+check('unfinished day is now tappable, so it can be opened and finished', !(await page.getByRole('button', { name: new RegExp(`^${monthDay(dB)}, workout unfinished`) }).isDisabled()));
 await shot('10-calendar');
 
 // Open the finished day, undo a set, go back: plan should change and say so.
 await page.getByRole('button', { name: `${monthDay(dA)}, 1 workout` }).click();
 await page.getByRole('button', { name: /Delete workout/ }).waitFor();
 check('past session opens editable', true);
-await page.getByRole('button', { name: /Squat/ }).click();
+check('...with its cards already open (nothing to expand first)', await page.getByRole('button', { name: /Complete set/ }).first().isVisible());
 await page.getByRole('button', { name: /Complete set/ }).first().click();
 await shot('11-past-edit');
 await page.getByRole('button', { name: 'Done' }).click();

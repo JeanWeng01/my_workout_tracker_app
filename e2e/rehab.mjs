@@ -32,7 +32,8 @@ await page.getByRole('button', { name: /Squat/ }).waitFor();
 
 // ---- 14. Pull-aparts are the first item in the first card's Warm-up row (squat), no extra card
 await page.getByRole('button', { name: /^Squat/ }).click();
-await page.getByRole('button', { name: /Warm-up \(\d+ sets\)/ }).click();
+await page.getByText(/Warm-up \(\d+ sets\)/).waitFor();
+check('warm-up sets are shown as soon as the card opens, with no link to click', (await page.locator('.warm-row').first().isVisible()) && (await page.getByRole('button', { name: /Warm-up/ }).count()) === 0);
 const warmText = await text();
 check('pull-aparts appear in the first card\'s Warm-up row', warmText.includes('Band pull-aparts × 20') && warmText.includes('Squeeze, hold 1 s'));
 const order = await page.evaluate(() => [...document.querySelectorAll('.warm-row')].map((r) => r.textContent));

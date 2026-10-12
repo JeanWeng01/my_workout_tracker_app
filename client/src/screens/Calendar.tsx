@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { dayStatuses, finishedOnDate, localeWeekStart, monthGrid, totalWorkouts, type Session } from '../engine';
+import { dayStatuses, finishedOnDate, localeWeekStart, monthGrid, openableOnDate, totalWorkouts, type Session } from '../engine';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -13,7 +13,7 @@ function dayLabel(date: string, status: 'finished' | 'unfinished' | undefined, c
   const d = new Date(`${date}T12:00:00`);
   const base = d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
   if (status === 'finished') return `${base}, ${count} workout${count === 1 ? '' : 's'}`;
-  if (status === 'unfinished') return `${base}, workout unfinished`;
+  if (status === 'unfinished') return `${base}, workout unfinished, tap to open and finish it`;
   return base;
 }
 
@@ -41,8 +41,8 @@ export function Calendar({ sessions, onOpen }: { sessions: Session[]; onOpen: (i
   };
 
   const tapDay = (date: string) => {
-    if (statuses.get(date) !== 'finished') return; // empty and yellow days do nothing
-    const list = finishedOnDate(sessions, date);
+    const list = openableOnDate(sessions, date); // finished and unfinished (yellow) workouts both open; empty days do nothing
+    if (!list.length) return;
     if (list.length === 1) onOpen(list[0].id);
     else setPick(list);
   };
@@ -78,7 +78,7 @@ export function Calendar({ sessions, onOpen }: { sessions: Session[]; onOpen: (i
                 key={di}
                 className={`cal-day${status ? ` ${status}` : ''}${date === today ? ' today' : ''}`}
                 aria-label={dayLabel(date, status, count)}
-                disabled={status !== 'finished'}
+                disabled={!status}
                 onClick={() => tapDay(date)}
               >
                 <span className="cal-num">{day}</span>
@@ -92,7 +92,7 @@ export function Calendar({ sessions, onOpen }: { sessions: Session[]; onOpen: (i
       {pick && (
         <div className="cal-pick">
           <div className="small">Which workout?</div>
-          {pick.map((s) => <button key={s.id} className="btn-link" onClick={() => onOpen(s.id)}>{s.label}</button>)}
+          {pick.map((s) => <button key={s.id} className="btn-link" onClick={() => onOpen(s.id)}>{s.finishedAt ? s.label : `${s.label} (unfinished)`}</button>)}
         </div>
       )}
       <div className="cal-total">Total workouts: {totalWorkouts(sessions)}</div>

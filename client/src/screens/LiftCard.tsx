@@ -87,11 +87,12 @@ function AlertBanner({ alert }: { alert: Alert }) {
 export function LiftCard({ session, li, program, onRest }: { session: Session; li: number; program: Program; onRest: StartRest }) {
   const log: LoggedLift = session.lifts[li];
   const lift = log.lift;
-  const [open, setOpen] = useState(false);
-  const [warmOpen, setWarmOpen] = useState(false);
-  const [edit, setEdit] = useState<{ si: number } | null>(null);
   const settings = program.settings;
-  const past = session.finishedAt !== null;
+  // A finished workout, or one that was left unfinished, is being edited after the fact: changes are saved to its record,
+  // there are no rest timers or live alerts, and its cards start open so it is obvious everything can be edited.
+  const past = session.finishedAt !== null || !!session.abandonedAt;
+  const [open, setOpen] = useState(past);
+  const [edit, setEdit] = useState<{ si: number } | null>(null);
   const act = (fn: (s: Session) => Session) => void (past ? updateSession(session.id, fn) : updateDraft(session.id, fn));
 
   const rehab = isRehabExercise(lift);
@@ -176,10 +177,8 @@ export function LiftCard({ session, li, program, onRest }: { session: Session; l
             <>
               {warm.length > 0 ? (
                 <div className="warmups">
-                  <button className="btn-link" aria-expanded={warmOpen} onClick={() => setWarmOpen(!warmOpen)} style={{ paddingLeft: 0 }}>
-                    Warm-up ({warm.length} sets) {warmOpen ? '▴' : '▾'}
-                  </button>
-                  {warmOpen && warm.map(({ s, i }) => (
+                  <div className="set-label warm-title">Warm-up ({warm.length} sets)</div>
+                  {warm.map(({ s, i }) => (
                     <div className="warm-row" key={i}>
                       {s.type === 'prep' ? (
                         <span>

@@ -14,6 +14,7 @@ import {
   liftsWithUntouched,
   planNextSession,
   resolveUntouched,
+  retroFinishedAt,
   pendingMigrations,
   SCHEMA_VERSION,
   slotOf,
@@ -151,7 +152,9 @@ export async function finishWorkout(id: string): Promise<FinishResult> {
       await db.sessions.delete(id);
       return { graduated: false, discarded: true };
     }
-    const finished = { ...finishSession(resolved, nowIso()), dirty: 1 as const };
+    // A workout recovered from "left unfinished" counts on the day it was done (see retroFinishedAt).
+    const stamp = cur.abandonedAt ? retroFinishedAt(cur.date, nowIso()) : nowIso();
+    const finished = { ...finishSession(resolved, stamp), dirty: 1 as const };
     await db.sessions.put(finished);
 
     const settings = await ensureSettings();

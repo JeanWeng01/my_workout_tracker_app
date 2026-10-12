@@ -289,7 +289,7 @@ When a lift reaches a 7th week, its card shows which type is scheduled, with a s
 
 **PRs:** On every AMRAP set, compute e1RM. If it beats that lift's best-ever e1RM, or beats my best reps at that exact weight, show a small "PR" badge on the set.
 
-### 4.5 Warm-up sets (shown collapsed inside each expanded lift, optional to tap)
+### 4.5 Warm-up sets (shown inside each opened lift, optional to tap)
 
 - **Linear phase:** if working weight ≤ bar: none. Otherwise bar × 5, then 55% × 3, then 75% × 2 of working weight, rounded nearest. Skip any warm-up ≤ bar or duplicating a previous one.
 - **5/3/1 phase:** 40% × 5, 50% × 5, 60% × 3 of TM, rounded nearest. Skip any below bar.
@@ -457,7 +457,7 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
 - **Lift cards, collapsed by default.** One line each: lift name, scheme, weight (big), plus an alert dot if there's an alert.
 - **Tap a card to expand it.** Inside:
   - Alert banner (if any).
-  - "Warm-up" row (collapsed, lighter style).
+  - **Warm-up sets**, shown straight away when the card opens (see below). There is no link to click to reveal them.
   - **Working weight**, large. Tap it to edit with a ± stepper using the rounding increment, or type a value. Editing it updates all not-yet-done work sets.
   - Plates per side, small.
   - **Set chips** in a row, each ≥ 56 px. An empty chip shows target reps.
@@ -466,7 +466,7 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
     - **Long-press** = edit that single set's weight and reps.
     - **AMRAP chip:** tap opens a big number picker defaulting to the minimum reps.
   - **Each set has a complete button** under its chip: a green-circle-with-a-check icon (48 px target). Grey when the set isn't done; tap → it turns green, the set is logged at target reps, and the rest timer starts. Tap again to undo. Once done, tapping the chip steps reps down (5 → 4 → … → 0 → back to target).
-  - **Warm-up sets** (4.5) are listed under a collapsed "Warm-up (N sets)" row, each with suggested weight × reps and its own complete button. Completing one starts the rest timer too.
+  - **Warm-up sets** (4.5) are listed **already expanded** under a "Warm-up (N sets)" heading as soon as the card opens, each with suggested weight × reps and its own complete button. Completing one starts the rest timer too. Nothing inside an opened card sits behind a "show" link.
   - **Rest timer:** a silent countdown bar pinned to the bottom of the screen, started by any complete tap. Wall-clock based (survives a locked screen). No buttons, no sound, no vibration: it only counts down, reads "Ready" at zero, and hides itself a few seconds later. Default rests: warm-up 60 s, **work sets 3 minutes**, supplemental 90 s (editable in Settings). Saved settings that still hold the briefly used 1:30 default move back to 3:00; times the lifter set themselves are kept.
   - Supplemental sets (FSL/BBB) as a second, slightly smaller chip row.
 - **Shoulder additions (4.8).** A rehab card shows the weight per hand ("2 × 15 lb"), its set chips, the cue `Lower for 3 s` and the Shoulder row; nothing else. Tracked lifts show the **Shoulder** row (0–10 chips, Sharp / pinching toggle, zone name) below their chips. The first card's Warm-up row starts with the band pull-aparts. The last card shows the shoulder accessories only after its main work is done. A paused lift reads "Paused" and is skipped. **Before the workout completes itself (or when Finish workout is tapped), unrated tracked lifts are asked about one by one ("Rate your shoulder for …?", with Skip); only then does the popup run.** The screen stays awake while a workout is open.
@@ -482,7 +482,8 @@ Alerts appear as a banner **inside the relevant lift card** (and are summarized 
 - Tapping the calendar icon **expands a panel** directly under the top of Home, pushing the rest of the content down. Tapping the icon again (or a close control) collapses it.
 - **Month grid** of the current month, with previous/next month arrows (swiping left/right also works). Week starts on the phone's locale default.
 - **Days with a finished workout** are a **green circle** with a check; **days with a workout started but never finished** are a **yellow circle** with a dash. Green wins if a date has both. Colour is never the only signal (check vs dash, plus the accessible label "October 6, 1 workout" / "October 3, workout unfinished"). Original wording for finished days: filled `lavender` with a small `iron` dot; today has an `iron` outline. Fill is never the only signal: workout days also carry the dot, and each day cell has an accessible label like "October 6, 1 workout".
-- **Tap a workout day** → opens that session in the same layout as the workout page, editable. If a day has more than one session, show a small list of them first.
+- **Tap a day with a workout** → opens that session in the same layout as the workout page, editable, **with all its cards already open**. If a day has more than one session (finished or unfinished), show a small list of them first (unfinished ones are labelled).
+- **Tap a yellow (unfinished) day** → the same screen, with a note "This workout was left unfinished. Tap the sets you did, then finish it. It will count on <that day>." It behaves like a workout in progress: tick the sets you did, rate the shoulder if asked, and tap **Finish workout** (or let the last green set finish it). Untouched sets: **Count as missed reps** or **Keep it unfinished** (nothing is lost either way); there is also **Delete workout**. Finishing it turns that day green and the workout **counts on the day it was done** (end of that day, or now if it was today), so it sits in the right place in the history, the A/B order and the progression. This is how to recover a workout that reset after 12 hours because Finish was never tapped.
 - Tapping a day with no workout does nothing.
 - **Directly beneath the calendar:** `Total workouts: X` in medium type (~20 px, weight 600, `ink`). X = all-time count of finished, non-deleted sessions.
 - **No planned schedule.** The calendar only shows what I logged, on the day I logged it (the session's local date).
@@ -646,6 +647,9 @@ Write scenario tests that feed sessions into `deriveState` / `planNextSession` a
 41. Upgrading a phone that holds old-format data (schema 1 settings, Day 1) keeps every logged value and the user's own settings.
 42. A phone already migrated by the first version of the update (both presses on rehab) gets exactly one "OHP back to the barbell" decision at 45 lb: Workout B shows the barbell Overhead Press, Bench stays on rehab, history and the first decisions are untouched, it never repeats, and a later Settings choice sticks.
 43. Work-set rest defaults to 3 minutes; a saved 1:30 default moves back to 3:00, a custom time is kept.
+44. Warm-up sets (and the pull-aparts) are visible the moment a card opens; there is no warm-up link. A past or unfinished workout opens with every card already open.
+45. A yellow day opens from the calendar and can be edited and finished: it turns green, counts on its own day (not the day it was recovered), moves the A/B order on, is marked for sync, and Home stops saying it was left unfinished. A finished workout can still be edited and deleted as before.
+46. Recovery rules: unfinished days are tappable; a date with several workouts lists them (unfinished ones labelled); untouched sets count as missed or the workout stays unfinished; deleting it removes it from the calendar.
 
 
 ---

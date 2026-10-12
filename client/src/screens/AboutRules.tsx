@@ -21,7 +21,7 @@ export function AboutRules() {
       <p>Warm-ups are suggestions only and never affect whether a lift counts as completed. Plates per side use only the plates you own. After more than 14 days away from a lift, the app suggests a lighter start (10% for 15 to 28 days, 20% beyond that). You can accept or keep your numbers.</p>
 
       <h3>Unfinished workouts</h3>
-      <p>If you can&apos;t finish a workout, leave it unfinished. That date shows yellow on the calendar, nothing from it counts, and next time you redo the same workout from the start. A workout you leave open and don&apos;t finish within 12 hours resets the same way.</p>
+      <p>If you can&apos;t finish a workout, leave it unfinished. That date shows yellow on the calendar, nothing from it counts, and next time you redo the same workout from the start. A workout you leave open and don&apos;t finish within 12 hours resets the same way. You can reopen an unfinished (yellow) day from the calendar, tick the sets you did and finish it: it then counts on the day it was done.</p>
 
       <h3>Shoulder rehab</h3>
       <p>While your shoulder recovers, a pressing lift can be replaced by a neutral-grip dumbbell version: DB floor press for Bench, seated DB overhead press for Overhead Press (Overhead Press is back on the barbell for now). They have their own history, and your barbell history is left alone. Each lift sits on one of three tracks: shoulder rehab, barbell linear, or 5/3/1, and you can move any lift between them in Settings.</p>

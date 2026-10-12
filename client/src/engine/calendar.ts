@@ -53,6 +53,13 @@ export function localeWeekStart(locale?: string): number {
   return 0;
 }
 
+/** Every workout on a date that can be opened: finished ones first (in time order), then unfinished ones. */
+export function openableOnDate(sessions: Session[], date: string): Session[] {
+  const finished = finishedOnDate(sessions, date);
+  const unfinished = sessions.filter((s) => !s.deleted && !s.finishedAt && s.abandonedAt && s.date === date).sort((a, b) => (a.abandonedAt! < b.abandonedAt! ? -1 : 1));
+  return [...finished, ...unfinished];
+}
+
 /** Finished sessions on one date, in time order. */
 export function finishedOnDate(sessions: Session[], date: string): Session[] {
   return sessions.filter((s) => !s.deleted && s.finishedAt && s.date === date).sort((a, b) => (a.finishedAt! < b.finishedAt! ? -1 : 1));

@@ -42,7 +42,12 @@ export function Workout({ session, program, onExit }: { session: Session; progra
   const [asking, setAsking] = useState<'finish' | 'leave' | null>(null);
   const startRest = (seconds: number) => setRest({ endsAt: Date.now() + seconds * 1000 });
   const linear = session.phase === 'linear';
+  // Three ways to be on this screen: a workout in progress, a finished one being edited (`past`), or one that was left
+  // unfinished and reopened from the calendar to be finished (`recovered`). The last two save to the record as you go.
   const past = session.finishedAt !== null;
+  const recovered = !past && !!session.abandonedAt;
+  const retro = past || recovered;
+  const persist = retro ? updateSession : updateDraft;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState(session.notes ?? '');
@@ -54,7 +59,7 @@ export function Workout({ session, program, onExit }: { session: Session; progra
   const [answered, setAnswered] = useState<number[]>([]);
   const shoulder = program.settings.shoulder;
 
-  useWakeLock(!past);
+  useWakeLock(!retro);
 
   const finish = async () => {
     const r = await finishWorkout(session.id);
@@ -108,7 +113,7 @@ export function Workout({ session, program, onExit }: { session: Session; progra
 
   const saveNote = (text: string) => {
     setNoteText(text);
-    void (past ? updateSession : updateDraft)(session.id, (x) => setNotes(x, text));
+    void persist(session.id, (x) => setNotes(x, text));
   };
   const noteBox = noteOpen && (
     <div style={{ marginTop: 8 }}>
@@ -134,12 +139,12 @@ export function Workout({ session, program, onExit }: { session: Session; progra
     <div className="page" style={{ paddingBottom: rest ? 120 : 48 }}>
       <Mantra />
       <div className="section">
-        <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => onExit()}>{past ? '← Back' : '← Home (workout stays open)'}</button>
+        <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => onExit()}>{retro ? '← Back' : '← Home (workout stays open)'}</button>
         <div style={{ fontWeight: 700 }}>{session.label}</div>
         <div className="small">{new Date(session.date + 'T12:00:00').toLocaleDateString()}</div>
       </div>
 
-      {!linear && !past && (
+      {!linear && !retro && (
         <div className="section" style={{ paddingTop: 0 }}>
           <div className="label">Extra work (applies from your next workout)</div>
           <div className="template-row">
@@ -154,6 +159,13 @@ export function Workout({ session, program, onExit }: { session: Session; progra
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {recovered && (
+        <div className="bubble notice" role="status" style={{ maxWidth: 520 }}>
+          This workout was left unfinished. Tap the sets you did, then finish it. It will count on{' '}
+          {new Date(session.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}.
         </div>
       )}
 
@@ -185,12 +197,12 @@ export function Workout({ session, program, onExit }: { session: Session; progra
             <div>
               <div style={{ fontWeight: 700, marginBottom: 8 }}>
                 {onlyAccessoriesLeft
-                  ? 'Some shoulder work is untouched. Count it as missed, or leave this workout unfinished and redo it from the start?'
-                  : 'Some sets are untouched. Count them as missed reps, or leave this workout unfinished and redo it from the start?'}
+                  ? `Some shoulder work is untouched. Count it as missed, or ${recovered ? 'keep it unfinished for now' : 'leave this workout unfinished and redo it from the start'}?`
+                  : `Some sets are untouched. Count them as missed reps, or ${recovered ? 'keep it unfinished for now' : 'leave this workout unfinished and redo it from the start'}?`}
               </div>
               <button className="btn" onClick={() => void finish()}>{onlyAccessoriesLeft ? 'Count as missed' : 'Count as missed reps'}</button>
               <div style={{ height: 8 }} />
-              <button className="btn" onClick={() => setAsking('leave')}>Leave unfinished</button>
+              <button className="btn" onClick={() => (recovered ? onExit() : setAsking('leave'))}>{recovered ? 'Keep it unfinished' : 'Leave unfinished'}</button>
               <button className="btn-link" onClick={() => setAsking(null)}>Back</button>
             </div>
           )}
@@ -204,10 +216,22 @@ export function Workout({ session, program, onExit }: { session: Session; progra
           {asking === null && (
             <>
               <button className="btn" onClick={onFinishTap}>Finish workout</button>
-              <div className="link-row">
-                <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setAsking('leave')}>Can't finish today</button>
-                {noteLink}
-              </div>
+              {recovered && confirmDelete ? (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Delete this workout? It stops counting toward your progression.</div>
+                  <button className="btn" onClick={async () => { await deleteSession(session.id); onExit(); }}>Delete workout</button>
+                  <button className="btn-link" onClick={() => setConfirmDelete(false)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="link-row">
+                  {recovered ? (
+                    <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setConfirmDelete(true)}>Delete workout</button>
+                  ) : (
+                    <button className="btn-link" style={{ paddingLeft: 0 }} onClick={() => setAsking('leave')}>Can't finish today</button>
+                  )}
+                  {noteLink}
+                </div>
+              )}
               {noteBox}
             </>
           )}
@@ -220,8 +244,8 @@ export function Workout({ session, program, onExit }: { session: Session; progra
           session={session}
           queue={ratingQueue}
           shoulder={shoulder}
-          onRate={(li, p: PainRating | null) => void updateDraft(session.id, (s) => setPain(s, li, p))}
-          onSkip={(li) => void updateDraft(session.id, (s) => skipPain(s, li))}
+          onRate={(li, p: PainRating | null) => void persist(session.id, (s) => setPain(s, li, p))}
+          onSkip={(li) => void persist(session.id, (s) => skipPain(s, li))}
           onAnswered={(li) => setAnswered((a) => [...a, li])}
           onDone={() => {
             setRatingQueue(null);
