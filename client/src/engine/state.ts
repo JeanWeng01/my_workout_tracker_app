@@ -537,7 +537,9 @@ function applyTrackChange(state: ProgramState, body: Extract<DecisionBody, { kin
   if (body.to === 'linear') {
     const start = body.startWeight ?? (lift === 'bench' || lift === 'ohp' ? settings.rehab.returnWeights[lift] : settings.startingWeights[lift]);
     state.track[lift] = 'linear';
-    state.linear[lift] = freshLinear(lift, start);
+    // Moving back to a barbell the lift has already been trained on can carry on from where it was (its state is untouched
+    // while the lift is on another track); otherwise it restarts at the starting weight.
+    if (!body.keepProgress) state.linear[lift] = freshLinear(lift, start);
   } else {
     state.track[lift] = '531';
     state.wave[lift] = { ...freshWave(), tm: body.startWeight ?? trainingMaxFromHistory(state, lift, settings) };

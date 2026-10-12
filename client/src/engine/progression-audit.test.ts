@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deterministicId, ohpBackToBarbellMigration } from './defaults';
+import { deterministicId, ohpBackToBarbellMigration, pendingMigrations } from './defaults';
 import { abandonSession, finishSession, retroFinishedAt } from './logging';
 import { planNextSession } from './plan';
 import { linearLift, ok, Timeline } from './testkit';
 import { alertFor, pain, rehabLift, withPain } from './testkit2';
+import type { Decision } from './types';
 
 const TODAY = '2026-10-12';
 const ohpNext = (t: Timeline) => t.state().linear.ohp.weight;
@@ -98,5 +99,70 @@ describe('the exact history: squat 80, deadlift 105, OHP 45 on Workout B', () =>
     const order = t.sessions.filter((s) => s.finishedAt).sort((a, b) => (a.finishedAt! < b.finishedAt! ? -1 : 1)).map((s) => s.date);
     expect(order).toEqual([...order].sort()); // chronological by the day it was done
     expect(t.state().linearSessionCount).toBe(3);
+  });
+});
+
+describe('the real history: ONE barbell OHP session at 45, never a dumbbell one', () => {
+  /** What the first version of the migration left on the phone: both presses on rehab, then OHP forced back with a reset. */
+  function realHistory() {
+    const t = new Timeline();
+    const early = '2026-10-08T09:00:00.000Z';
+    const s0 = t.log([linearLift('squat', 65, ok()), linearLift('bench', 45, ok()), linearLift('row', 45, ok())], 'linear', 0); // A
+    for (const lift of ['bench', 'ohp'] as const) {
+      t.decisions.push({
+        id: deterministicId(`schema2:track_change:${lift}:rehab`), updatedAt: early, deleted: false, schemaVersion: 2, createdAt: early,
+        afterSessionId: s0.id, body: { kind: 'track_change', lift, to: 'rehab', startWeight: lift === 'bench' ? 15 : 12.5 },
+      });
+    }
+    // B was done on the BARBELL (its draft predates the update): OHP 45, completed
+    const s1 = t.log([linearLift('squat', 70, ok()), linearLift('ohp', 45, ok()), linearLift('deadlift', 95, [5])], 'linear', 1);
+    t.log([linearLift('squat', 75, ok()), linearLift('bench', 45, ok()), linearLift('row', 50, ok())], 'linear', 3); // A, Saturday
+    // the first version's "OHP back to the barbell" step, created on Monday after the latest finished workout
+    const late = '2026-10-12T08:30:00.000Z';
+    t.decisions.push({
+      id: deterministicId('migration:track_change:ohp:linear:back-to-barbell'), updatedAt: late, deleted: false, schemaVersion: 2, createdAt: late,
+      afterSessionId: s1.id, body: { kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: 45 },
+    });
+    return t;
+  }
+  /** Applies a migration's output the way the app does: a record with the same id replaces the old one. */
+  const apply = (t: Timeline, made: Decision[]) => {
+    for (const d of made) t.decisions = [...t.decisions.filter((x) => x.id !== d.id), d];
+  };
+
+  it('after the one completed barbell session OHP must be 50, not 45 (the bug the first version caused)', () => {
+    const fixed = realHistory();
+    apply(fixed, pendingMigrations(fixed.settings, fixed.sessions, fixed.decisions, '2026-10-12T12:00:00.000Z'));
+    expect(planNextSession(fixed.state(), fixed.settings, TODAY).lifts.map((l) => [l.lift, l.workingWeight])).toEqual([['squat', 80], ['ohp', 50], ['deadlift', 105]]);
+  });
+
+  it('the old reset decision is retracted (tombstoned) and replaced by one that keeps the barbell progress', () => {
+    const t = realHistory();
+    const made = pendingMigrations(t.settings, t.sessions, t.decisions, '2026-10-12T12:00:00.000Z');
+    expect(made).toHaveLength(2);
+    const [dead, fresh] = made;
+    expect(dead.deleted).toBe(true);
+    expect(dead.id).toBe(deterministicId('migration:track_change:ohp:linear:back-to-barbell'));
+    expect(fresh.deleted).toBe(false);
+    expect(fresh.body).toEqual({ kind: 'track_change', lift: 'ohp', to: 'linear', keepProgress: true });
+    expect([fresh.createdAt, fresh.afterSessionId]).toEqual([dead.createdAt, dead.afterSessionId]); // replays at the same spot
+    apply(t, made);
+    expect(pendingMigrations(t.settings, t.sessions, t.decisions)).toEqual([]); // and it only happens once
+    expect(t.state().track.ohp).toBe('linear');
+    expect(t.state().track.bench).toBe('rehab');
+  });
+
+  it('later OHP sessions keep progressing from there (50 -> 55)', () => {
+    const t = realHistory();
+    apply(t, pendingMigrations(t.settings, t.sessions, t.decisions, '2026-10-12T12:00:00.000Z'));
+    t.log([linearLift('squat', 80, ok()), linearLift('ohp', 50, ok()), linearLift('deadlift', 105, [5])], 'linear', 5);
+    expect(t.state().linear.ohp.weight).toBe(55);
+  });
+
+  it('a choice made later in Settings still stands after the correction', () => {
+    const t = realHistory();
+    t.decide({ kind: 'track_change', lift: 'ohp', to: 'rehab', startWeight: 12.5 }); // later, by hand
+    apply(t, pendingMigrations(t.settings, t.sessions, t.decisions, '2026-10-12T12:00:00.000Z'));
+    expect(t.state().track.ohp).toBe('rehab');
   });
 });

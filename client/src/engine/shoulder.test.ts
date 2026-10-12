@@ -114,14 +114,14 @@ describe('1b. Overhead Press goes back to the barbell', () => {
     expect(schema2Migration(fresh.settings, fresh.sessions, fresh.decisions)[0].id).toBe(t.decisions[0].id);
   });
 
-  it('puts OHP back on the barbell at the return weight (45), after the latest session; Bench stays on rehab', () => {
+  it('puts OHP back on the barbell, continuing its barbell progress (45 here: it never had a session), after the latest session; Bench stays on rehab', () => {
     const t = migratedByFirstVersion();
     t.log([linearLift('squat', 70, ok()), rehabLift(exO, 12.5, 10, undefined, pain(1)), linearLift('deadlift', 95, [5])]); // B on rehab OHP
     expect(t.state().track.ohp).toBe('rehab');
     const before = JSON.stringify(t.sessions);
     const made = ohpBackToBarbellMigration(t.settings, t.sessions, t.decisions, '2026-01-05T00:00:00.000Z');
     expect(made).toHaveLength(1);
-    expect(made[0].body).toEqual({ kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: 45 });
+    expect(made[0].body).toEqual({ kind: 'track_change', lift: 'ohp', to: 'linear', keepProgress: true });
     expect(made[0].afterSessionId).toBe('s1'); // after the rehab OHP session just logged
     t.decisions.push(...made);
     expect(JSON.stringify(t.sessions)).toBe(before); // logged history untouched

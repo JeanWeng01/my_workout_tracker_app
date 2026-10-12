@@ -144,28 +144,38 @@ export function schema2Migration(settings: Settings, sessions: Session[], decisi
   ];
 }
 
-const OHP_BACK_ID = deterministicId('migration:track_change:ohp:linear:back-to-barbell');
+/** The first version of this step reset OHP to 45 even if it had barbell sessions, wiping out their progress. */
+const OHP_BACK_V1_ID = deterministicId('migration:track_change:ohp:linear:back-to-barbell');
+const OHP_BACK_ID = deterministicId('migration:track_change:ohp:linear:back-to-barbell:keep-progress');
 
 /**
- * The shoulder tolerated the barbell overhead press, so Overhead Press goes back to the barbell. A phone that already
- * moved it to rehab (the first version of the shoulder update did) gets one decision putting it back on the linear track at
- * the return weight, effective after the latest finished session. It runs once (fixed id), only if OHP is still on rehab,
- * and never overrides a choice made later in Settings. Moving it to rehab again is always possible in Settings → Lift tracks.
+ * The shoulder tolerated the barbell overhead press, so Overhead Press goes back to the barbell **and carries on from the
+ * barbell progress it already has** (nothing is reset). A phone that already moved it to rehab (the first version of the
+ * shoulder update did) gets one decision doing that, at the same spot in its history. A phone that also received the first
+ * version of this step (which restarted OHP at 45 and so erased earned progress) has that decision retracted (a tombstone,
+ * which syncs) and replaced. It runs once (fixed id) and never overrides a choice made later in Settings.
  */
 export function ohpBackToBarbellMigration(settings: Settings, sessions: Session[], decisions: Decision[], now = new Date().toISOString()): Decision[] {
   if (decisions.some((d) => d.id === OHP_BACK_ID)) return [];
-  if (deriveState(settings, sessions, decisions).track.ohp !== 'rehab') return [];
-  return [
-    {
-      id: OHP_BACK_ID,
-      updatedAt: now,
-      deleted: false,
-      schemaVersion: SCHEMA_VERSION,
-      createdAt: now,
-      afterSessionId: latestFinishedId(sessions),
-      body: { kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: settings.rehab.returnWeights.ohp },
-    },
-  ];
+  const old = decisions.find((d) => d.id === OHP_BACK_V1_ID);
+  const out: Decision[] = [];
+  if (old && !old.deleted) {
+    const retracted: Decision = { ...old, deleted: true, updatedAt: now };
+    out.push(retracted);
+  } else if (!old && deriveState(settings, sessions, decisions).track.ohp !== 'rehab') {
+    return []; // a fresh install, or the lifter already moved it
+  }
+  // Replace at the old decision's own position so everything after it replays exactly as before; a new one goes at the end.
+  out.push({
+    id: OHP_BACK_ID,
+    updatedAt: now,
+    deleted: false,
+    schemaVersion: SCHEMA_VERSION,
+    createdAt: old?.createdAt ?? now,
+    afterSessionId: old ? old.afterSessionId : latestFinishedId(sessions),
+    body: { kind: 'track_change', lift: 'ohp', to: 'linear', keepProgress: true },
+  });
+  return out;
 }
 
 /** Everything the app has to create on launch, in order. Idempotent. */

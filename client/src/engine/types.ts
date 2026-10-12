@@ -236,8 +236,11 @@ export type DecisionBody =
   | { kind: 'set_tm'; lift: MainLift; tm: number }
   | { kind: 'override_7th'; lift: MainLift; sevenType: SevenType }
   | { kind: 'restart_linear'; weights: Record<Lift, number> }
-  /** Move a main lift to another track. `startWeight`: rehab dumbbell / barbell weight / training max. */
-  | { kind: 'track_change'; lift: MainLift; to: Track; startWeight?: number }
+  /**
+   * Move a main lift to another track. `startWeight`: rehab dumbbell / barbell weight / training max.
+   * `keepProgress` (moving to `linear`): carry on from the barbell progress the lift already has instead of restarting.
+   */
+  | { kind: 'track_change'; lift: MainLift; to: Track; startWeight?: number; keepProgress?: boolean }
   | { kind: 'pause_lift'; lift: MainLift }
   | { kind: 'resume_lift'; lift: MainLift };
 

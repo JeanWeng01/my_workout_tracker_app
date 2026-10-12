@@ -208,7 +208,7 @@ home = await text();
 check('already-migrated phone: Workout B now has the barbell Overhead Press, not the dumbbell one', /Overhead Press 5×5/.test(home) && !home.includes('Seated DB OHP'));
 db = await readDb();
 const back = db.decisions.filter((d) => d.body.kind === 'track_change' && d.body.lift === 'ohp' && d.body.to === 'linear');
-check('exactly one "OHP back to the barbell" decision was added, at 45 lb, after Day 1', back.length === 1 && back[0].body.startWeight === 45 && back[0].afterSessionId === DAY1.id);
+check('exactly one "OHP back to the barbell" decision was added (it keeps barbell progress), after Day 1', back.length === 1 && back[0].body.keepProgress === true && back[0].afterSessionId === DAY1.id);
 check('the first version\'s two decisions are untouched', db.decisions.filter((d) => d.body.to === 'rehab').length === 2);
 check('Bench is still on rehab', db.decisions.some((d) => d.body.lift === 'bench' && d.body.to === 'rehab'));
 check('Day 1 is still untouched', JSON.stringify(db.sessions.find((s) => s.id === DAY1.id)) === JSON.stringify(DAY1));
@@ -220,6 +220,65 @@ await page.getByRole('button', { name: 'Start workout' }).click();
 await page.getByRole('button', { name: /^Squat/ }).click();
 await page.getByRole('button', { name: /^Complete set/ }).first().click();
 check('the saved 1:30 rest default now rests 3:00', /3:00|2:59/.test(await page.getByRole('timer').innerText()));
+
+// ---- Scenario 3: the phone that got the FIRST version of the "OHP back" step (which restarted OHP at 45) after one completed
+// barbell OHP session. Today's OHP must be 50 again, and the bad decision must be retracted.
+const sets = (w, reps = 5, n = 5) => Array.from({ length: n }, () => ({ type: 'work', targetWeight: w, targetReps: reps, weight: w, reps, done: true }));
+const mk = (id, date, label, lifts) => ({
+  id, updatedAt: `${date}T20:00:00.000Z`, deleted: false, schemaVersion: 2, date, finishedAt: `${date}T20:00:00.000Z`, phase: 'linear', label, lifts, dirty: 0,
+});
+const SB = mk('7d3a0c9e-1b2f-4c55-9a11-0f6f2a8f1a02', '2026-10-08', 'Workout B', [
+  { lift: 'squat', scheme: '5x5', skipped: false, sets: sets(70) },
+  { lift: 'ohp', scheme: '5x5', skipped: false, sets: sets(45) }, // ONE barbell OHP session, completed
+  { lift: 'deadlift', scheme: '1x5', skipped: false, sets: sets(95, 5, 1) },
+]);
+const SA2 = mk('7d3a0c9e-1b2f-4c55-9a11-0f6f2a8f1a03', '2026-10-10', 'Workout A', [
+  { lift: 'squat', scheme: '5x5', skipped: false, sets: sets(75) },
+  { lift: 'db_floor_press', scheme: 'rehab', skipped: false, pain: { rating: 1, sharp: false }, sets: sets(15, 10, 3) },
+  { lift: 'row', scheme: '5x5', skipped: false, sets: sets(50) },
+]);
+const v1 = {
+  id: deterministicId('migration:track_change:ohp:linear:back-to-barbell'),
+  updatedAt: '2026-10-12T08:30:00.000Z', deleted: false, schemaVersion: 2, createdAt: '2026-10-12T08:30:00.000Z', afterSessionId: SB.id,
+  body: { kind: 'track_change', lift: 'ohp', to: 'linear', startWeight: 45 }, dirty: 0,
+};
+await page.evaluate(
+  async ({ sessions, decisions }) => {
+    await new Promise((res, rej) => {
+      const open = indexedDB.open('bulletproof');
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction(['sessions', 'decisions'], 'readwrite');
+        tx.objectStore('sessions').clear();
+        tx.objectStore('decisions').clear();
+        for (const s of sessions) tx.objectStore('sessions').put(s);
+        for (const d of decisions) tx.objectStore('decisions').put(d);
+        tx.oncomplete = () => {
+          db.close();
+          res();
+        };
+        tx.onerror = () => rej(tx.error);
+      };
+      open.onerror = () => rej(open.error);
+    });
+  },
+  { sessions: [DAY1, SB, SA2], decisions: [...firstVersionDecisions, v1] },
+);
+await page.reload();
+await page.getByText('Ego lifts').waitFor();
+await page.getByRole('heading', { name: 'Workout B' }).waitFor({ timeout: 8000 });
+home = await text();
+check('one completed barbell OHP session at 45: Workout B now has OHP 50, squat 80, deadlift 105', /Overhead Press 5×5/.test(home) && home.includes('50') && home.includes('80') && home.includes('105'));
+db = await readDb();
+const retracted = db.decisions.find((d) => d.id === v1.id);
+check('the earlier reset decision is retracted (a tombstone that syncs)', retracted?.deleted === true && retracted.dirty === 1);
+const keep = db.decisions.filter((d) => d.body.kind === 'track_change' && d.body.lift === 'ohp' && d.body.keepProgress === true && !d.deleted);
+check('...and one that keeps the progress replaced it at the same point in the history', keep.length === 1 && keep[0].createdAt === v1.createdAt && keep[0].afterSessionId === SB.id);
+check('the workouts themselves are untouched', JSON.stringify(db.sessions.find((s) => s.id === SB.id)) === JSON.stringify(SB));
+await page.reload();
+await page.getByRole('heading', { name: 'Workout B' }).waitFor();
+db = await readDb();
+check('another launch changes nothing more', db.decisions.filter((d) => d.body.kind === 'track_change').length === 4);
 
 console.log(errors.length ? `console errors:\n${errors.join('\n')}` : 'no console errors');
 await browser.close();
